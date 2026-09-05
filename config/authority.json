@@ -1,0 +1,7 @@
+[
+  {"artifactClass": "BuildDefinition", "operation": "ModifyDependencyCoordinate", "owner": "build-agent"},
+  {"artifactClass": "ScalaSource", "operation": "AdaptSourceApi", "owner": "source-agent"},
+  {"artifactClass": "TestSource", "operation": "RepairTest", "owner": "test-agent"},
+  {"artifactClass": "ContainerDefinition", "operation": "BuildContainer", "owner": "container-agent"},
+  {"artifactClass": "DeploymentDefinition", "operation": "DeployArtifact", "owner": "deploy-agent"}
+]

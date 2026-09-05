@@ -1,0 +1,5 @@
+{
+  "requiredGlobalForbiddenEffects": ["secret.read"],
+  "requireEvidenceBeforeSuccess": true,
+  "requireHandoffOnOutOfScopeWrite": true
+}

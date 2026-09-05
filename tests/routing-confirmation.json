@@ -1,0 +1,50 @@
+[
+  {
+    "id": "confirm-build-001",
+    "kind": "positive",
+    "requests": [
+      "Only in build.sbt, move cats-effect from 3.5.4 to 3.6.1.",
+      "Select cats-effect 3.6.1 in the sbt dependency declaration; no source edits.",
+      "Repair dependency resolution for org.typelevel cats-effect in libraryDependencies."
+    ],
+    "expected": "build-agent",
+    "mustNot": ["source-agent"],
+    "protectedCase": true
+  },
+  {
+    "id": "confirm-source-001",
+    "kind": "near-miss",
+    "requests": [
+      "The cats-effect coordinate is correct; change only src/main/scala code for its new API.",
+      "No build-definition change is needed. Fix the Scala compile error after the dependency upgrade.",
+      "Adapt the Resource call site without touching libraryDependencies."
+    ],
+    "expected": "source-agent",
+    "mustNot": ["build-agent"],
+    "protectedCase": true
+  },
+  {
+    "id": "confirm-test-001",
+    "kind": "near-miss",
+    "requests": [
+      "The build and source compile; repair the MUnit CatsEffectSuite timeout.",
+      "Change only tests after the cats-effect update.",
+      "Increase test coverage without editing build.sbt."
+    ],
+    "expected": "test-agent",
+    "mustNot": ["build-agent", "source-agent"],
+    "protectedCase": true
+  },
+  {
+    "id": "confirm-deploy-001",
+    "kind": "hard-negative",
+    "requests": [
+      "The image is built; change only the staging rollout manifest.",
+      "Update the ECS revision to use the new digest.",
+      "Do not rebuild; deploy the existing image."
+    ],
+    "expected": "deploy-agent",
+    "mustNot": ["build-agent", "container-agent"],
+    "protectedCase": true
+  }
+]

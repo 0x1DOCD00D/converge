@@ -1,0 +1,10 @@
+target/
+project/target/
+project/project/
+.bsp/
+.metals/
+.idea/
+.vscode/
+out/*
+!out/.gitkeep
+.DS_Store

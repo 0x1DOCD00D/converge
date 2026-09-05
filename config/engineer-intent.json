@@ -1,0 +1,20 @@
+{
+  "seed": "build.sbt",
+  "normalizedGoal": "Update the named sbt dependency",
+  "artifactClass": "BuildDefinition",
+  "artifactLocators": ["build.sbt"],
+  "operation": "ModifyDependencyCoordinate",
+  "coordinate": "org.typelevel %% cats-effect",
+  "fromVersion": "3.5.4",
+  "toVersion": "3.6.1",
+  "expectedOwner": "build-agent",
+  "allowedWrites": ["build.sbt"],
+  "forbiddenWrites": ["src/**", "Dockerfile", "infra/**", ".github/**", "deployment/**"],
+  "allowedEffects": ["repo.write:build.sbt", "build.execute"],
+  "forbiddenEffects": ["repo.write:src/**", "repo.write:Dockerfile", "repo.write:infra/**", "cloud.apply", "secret.read"],
+  "positiveAnchors": ["build.sbt", "libraryDependencies", "ModuleID", "dependency coordinate", "sbt update"],
+  "negativeAnchors": ["pom.xml", "package.json", "Scala source refactoring", "Dockerfile", "Terraform", "deployment"],
+  "validationCommands": ["sbt clean update test"],
+  "requiredEvidence": ["unified diff", "selected dependency graph", "eviction output", "exit status"],
+  "handoffOwner": "source-agent"
+}

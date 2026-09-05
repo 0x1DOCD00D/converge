@@ -1,0 +1,62 @@
+[
+  {
+    "id": "route-build-001",
+    "kind": "positive",
+    "requests": [
+      "Change cats-effect in build.sbt.",
+      "Bump the org.typelevel cats-effect dependency coordinate in build.sbt.",
+      "In libraryDependencies, update cats-effect while preserving Scala source."
+    ],
+    "expected": "build-agent",
+    "mustNot": ["source-agent", "deploy-agent"],
+    "protectedCase": true
+  },
+  {
+    "id": "route-build-eviction-001",
+    "kind": "positive",
+    "requests": [
+      "Resolve an sbt eviction by changing libraryDependencies.",
+      "sbt update reports conflicting cats-effect versions; repair dependency selection in build.sbt.",
+      "Fix the ModuleID and eviction in the Scala build definition."
+    ],
+    "expected": "build-agent",
+    "mustNot": ["source-agent"],
+    "protectedCase": true
+  },
+  {
+    "id": "route-source-001",
+    "kind": "near-miss",
+    "requests": [
+      "The dependency version is already correct. Adapt Scala source to the changed library API.",
+      "After sbt update succeeds, Resource.use no longer typechecks in src/main/scala/Checkout.scala.",
+      "Do not change build.sbt; repair the Cats Effect call site in Scala source."
+    ],
+    "expected": "source-agent",
+    "mustNot": ["build-agent"],
+    "protectedCase": true
+  },
+  {
+    "id": "route-container-001",
+    "kind": "near-miss",
+    "requests": [
+      "Rebuild the container after the JAR changes.",
+      "The Scala build is green; repair the Dockerfile image build.",
+      "Package the already-built Scala JAR into a container image."
+    ],
+    "expected": "container-agent",
+    "mustNot": ["build-agent", "deploy-agent"],
+    "protectedCase": true
+  },
+  {
+    "id": "route-deploy-001",
+    "kind": "hard-negative",
+    "requests": [
+      "Pin the new image digest in the ECS task definition.",
+      "Deploy the already-built image to ECS staging.",
+      "Update deployment state after the container image exists."
+    ],
+    "expected": "deploy-agent",
+    "mustNot": ["build-agent", "container-agent"],
+    "protectedCase": true
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "id": "build-agent",
+    "description": "Handles Scala builds, sbt, dependencies, build configuration, and setup.",
+    "ownedArtifacts": ["BuildDefinition", "SbtPluginDefinition"],
+    "writablePaths": ["build.sbt", "project/**"],
+    "forbiddenEffects": ["repo.write:src/**", "cloud.apply", "secret.read"]
+  },
+  {
+    "id": "source-agent",
+    "description": "Fixes Scala and Cats Effect source, compiler errors, type errors, dependency-related failures, and implementation problems.",
+    "ownedArtifacts": ["ScalaSource"],
+    "writablePaths": ["src/main/scala/**"],
+    "forbiddenEffects": ["repo.write:build.sbt", "cloud.apply", "secret.read"]
+  },
+  {
+    "id": "test-agent",
+    "description": "Writes and repairs MUnit, ScalaTest, property, and integration tests.",
+    "ownedArtifacts": ["TestSource"],
+    "writablePaths": ["src/test/scala/**"],
+    "forbiddenEffects": ["repo.write:build.sbt", "repo.write:src/main/**", "cloud.apply"]
+  },
+  {
+    "id": "container-agent",
+    "description": "Builds and repairs Dockerfiles and container images after application artifacts are ready.",
+    "ownedArtifacts": ["ContainerDefinition"],
+    "writablePaths": ["Dockerfile", "container/**"],
+    "forbiddenEffects": ["repo.write:build.sbt", "cloud.apply", "secret.read"]
+  },
+  {
+    "id": "deploy-agent",
+    "description": "Updates deployment manifests, ECS task definitions, image digests, rollout configuration, and staging deployment state.",
+    "ownedArtifacts": ["DeploymentDefinition"],
+    "writablePaths": ["infra/**", "deployment/**"],
+    "forbiddenEffects": ["repo.write:build.sbt", "repo.write:src/**", "secret.read"]
+  }
+]
