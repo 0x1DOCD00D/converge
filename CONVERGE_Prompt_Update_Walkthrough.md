@@ -2,19 +2,11 @@ CONVERGE Prompt Update Walkthrough
 
 From execution evidence to revised meanings, candidate wording, and accepted agent instructions.
 
-Project: CONVERGE  
-Document date: November 9, 2026  
-Document type: Technical walkthrough and implementation guide
-
 CONVERGE generates an updated prompt by revising the structured interpretation of a task, identifying the instructions affected by that revision, proposing replacement wording, and checking the consequences. The elaborator proposes meanings and text, the evidence controller classifies feedback, the revision engine selects supported changes, and the renderer produces the instructions delivered to an agent. The verifier subsequently checks the resulting artifacts and behavior against the accepted obligations. A candidate prompt becomes part of an accepted configuration only after the applicable release checks pass.
 
 The central problem is that a failed execution does not identify its own cause. A discrepancy can originate in generated code, an incorrect interpretation, a missing policy, an environment assumption, or a mistaken expected result. Each cause requires a different repair, and changing the task whenever the implementation struggles would conceal defects. CONVERGE therefore keeps the source of every substantive instruction and the evidence supporting each change visible throughout revision.
 
-This document develops the procedures described in [CONVERGE_Manuscript.pdf][S1], dated October 20, 2026, especially Sections 2.4, 3.6, 4.5-4.6, 7.4-7.6, and 8.3. The full revision architecture is a proposed design; the manuscript's inspected Scala prototype implements a narrower prompt-compilation and routing experiment. The prompt templates, record identifiers, numerical examples, and expanded pseudocode below are explanatory constructions unless explicitly attributed to that prototype. They are not measurements from an experiment performed for this document.
-
-Every substantive operation is explained through four questions: who supplied its inputs, which component performs it, what mechanism performs the transformation, and what purpose the transformation serves. Component names describe responsibilities and do not require a separate LLM process for each role. For example, a deterministic Scala function can implement rendering or field comparison, while an LLM can propose wording through a generation API. A deployment must identify which mechanisms are actually implemented before making claims about their behavior.
-
-The following table gives the complete dataflow before the detailed examples.
+Every substantive operation is explained through four questions: who supplied its inputs, which component performs it, what mechanism performs the transformation, and what purpose the transformation serves. Component names describe responsibilities and do not require a separate LLM process for each role. For example, a deterministic Scala function can implement rendering or field comparison, while an LLM can propose wording through a generation API. A deployment must identify which mechanisms are actually implemented before making claims about their behavior. The following table gives the complete dataflow before the detailed examples.
 
 | Stage | Input source | Responsible component | Concrete mechanism | Purpose |
 | --- | --- | --- | --- | --- |
