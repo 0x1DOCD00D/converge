@@ -33,7 +33,7 @@ Do not modify the input files.
 
 The word "latest" does not identify a clock. A record may contain both the time an event occurred and the time the application received it. These times can disagree because networks delay messages, devices reconnect, or batches arrive out of order. Consequently, a program can execute successfully and still implement a different meaning from the one the user intended.
 
-The controller keeps the following representations separate. EngineerIntent records the engineer-supplied task contract, TaskIR normalizes one request, and SPECIR records accepted meanings together with obligations and unresolved gaps. The executable workflow supplies operations that realize the accepted interpretation. The rendered prompt is a view compiled from the relevant records, rather than the only place where the task's meaning exists. [S1], Section 2.4.
+The controller keeps the following representations separate. EngineerIntent records the engineer-supplied task contract, TaskIR normalizes one request, and SPECIR records accepted meanings together with obligations and unresolved gaps. The executable workflow supplies operations that realize the accepted interpretation. The rendered prompt is a view compiled from the relevant records, rather than the only place where the task's meaning exists.
 
 | Representation | Purpose | Running example |
 | --- | --- | --- |
