@@ -6,7 +6,11 @@ CONVERGE generates an updated prompt by revising the structured interpretation o
 
 The central problem is that a failed execution does not identify its own cause. A discrepancy can originate in generated code, an incorrect interpretation, a missing policy, an environment assumption, or a mistaken expected result. Each cause requires a different repair, and changing the task whenever the implementation struggles would conceal defects. CONVERGE therefore keeps the source of every substantive instruction and the evidence supporting each change visible throughout revision.
 
-Every substantive operation is explained through four questions: who supplied its inputs, which component performs it, what mechanism performs the transformation, and what purpose the transformation serves. Component names describe responsibilities and do not require a separate LLM process for each role. For example, a deterministic Scala function can implement rendering or field comparison, while an LLM can propose wording through a generation API. A deployment must identify which mechanisms are actually implemented before making claims about their behavior. The following table gives the complete dataflow before the detailed examples.
+This walkthrough defines the prompt-update procedure, its data structures, its decision rules, and its acceptance conditions directly. The complete controller is a proposed architecture, while the Scala reference prototype described here implements a more limited prompt-compilation and routing harness. The examples explain how the procedure should operate and distinguish those design obligations from the reference prototype's actual capabilities. Prompt templates, record identifiers, sample scores, and mathematical examples are illustrative constructions rather than reported experimental results.
+
+Every substantive operation is explained through four questions: who supplied its inputs, which component performs it, what mechanism performs the transformation, and what purpose the transformation serves. Component names describe responsibilities and do not require a separate LLM process for each role. For example, a deterministic Scala function can implement rendering or field comparison, while an LLM can propose wording through a generation API. A deployment must identify which mechanisms are actually implemented before making claims about their behavior.
+
+The following table gives the complete dataflow before the detailed examples.
 
 | Stage | Input source | Responsible component | Concrete mechanism | Purpose |
 | --- | --- | --- | --- | --- |
@@ -44,6 +48,46 @@ The controller keeps the following representations separate. EngineerIntent reco
 | Executable workflow | Describe operations implementing the task | Read, validate, group, select, publish |
 | Rendered prompt | Instruct a particular agent | Implement the accepted selection rule |
 | Evidence ledger | Record observations, clarifications, and provenance | User accepted event-time ordering |
+
+An intermediate representation, abbreviated IR, is a structured record that makes a task's fields explicit before the controller renders prose or generates code. The engineer supplies EngineerIntent through a request or accepted configuration. The elaborator proposes TaskIR by assigning normalized operations, arguments, and resources to that intent, and the ratifier records which assignments are accepted. SPECIR, the specification intermediate representation, collects those accepted assignments together with provenance, dependencies, and unresolved obligations across the task.
+
+A construct is a particular occurrence of a meaningful phrase in the original request. For this example, C_group identifies "for each customer," C_latest identifies "latest update," C_output identifies "new file," and C_preserve identifies "do not modify the input files." The source mapper records the clause identifier and text span for each occurrence, rather than assuming that every appearance of the same word has the same meaning. A source mapping lets the checker identify precisely which requirement supports a generated instruction and which original phrase must be revisited after a discrepancy.
+
+The accepted meaning of a construct is a typed operation with explicit obligations. A type describes the kind of value that an operation accepts or returns; a precondition describes when it is supported; a postcondition describes what a successful result must satisfy. An effect records an allowed state change, while a frame condition records state that must remain unchanged. The binding map then associates an abstract operation, such as publishing a new result, with a specific implementation and resource contract.
+
+| Field | Concrete meaning in the example | Supplied or checked by |
+| --- | --- | --- |
+| Operation | Select a maximum within one customer group | Elaborator and semantic checker |
+| Input type | Nonempty group of validated records | Schema reader and type checker |
+| Output type | One selected record after ties are resolved | Accepted selection policy |
+| Precondition | Required timestamps parse and identifier rules hold | Domain policy and validator |
+| Postcondition | No record in the group has a greater accepted key | Semantic checker and execution verifier |
+| Effect | Create a fresh output resource | User authorization and effect controller |
+| Frame | Input resources remain unchanged | User requirement and execution enforcement |
+| Binding | Concrete parser, reader, and output-creation primitive | Resource registry and binding checker |
+
+An obligation is a property that some named checker must establish before the controller makes a corresponding claim. For example, the grouping obligation requires one selected record per customer, while the frame obligation requires unchanged inputs. A contract is a collection of such input assumptions, output guarantees, and effect restrictions for an operation. The registry owner supplies a contract for a binding, and the controller must identify whether its guarantees are trusted, formally established, or only supported by tests.
+
+A reasoning epoch is a versioned interval during which the assumptions used by a particular analysis remain fixed. The controller records the protected requirements, model and encoder identities, candidate grammar, contracts, and evidence policy in an epoch manifest. Ordinary observations can accumulate inside that interval, but changing a protected requirement or a premise of a claimed theorem requires a new applicable epoch or explicit revalidation of the affected claim. This prevents a guarantee established for one task and environment from silently being reused after the problem changes.
+
+```text
+Controller state at revision t:
+  protectedIntent
+  specificationText
+  acceptedMeanings
+  factualEvidence
+  defeasibleDefaults
+  dependencyGraph
+  explanatoryHypotheses
+  workflow
+  resourceBindings
+  testObligations
+  geometryPolicy
+  versionManifest
+  remainingBudget
+```
+
+The controller stores these fields explicitly because a prompt string cannot reliably encode their different roles. For example, an observed output belongs to factual evidence, an intended output belongs to an accepted obligation, and a model's guess belongs to a hypothesis collection. The revision index t advances when the controller records a new candidate state, while the manifest identifies the fixed context under which that state is interpreted. The prompt renderer reads the appropriate accepted fields and work obligations when preparing the next agent invocation.
 
 An illustrative initial record follows. The schema reader supplies the available field names, while the elaborator proposes grouping and maximum selection from the sentence structure. The checker preserves the relationship between "for each customer" and "latest" so that selection remains inside each customer group. The unresolved entries prevent a provisional model choice from being mistaken for an accepted requirement.
 
@@ -105,7 +149,7 @@ Before an authoritative source resolves the clock, this fixture exposes a specif
 
 The third step records feedback as evidence with explicit semantic roles.
 
-The user supplies the intended interpretation, while the execution harness supplies observations about specific runs. The evidence resolver stores both through a typed ledger interface that records source, subject, version, scope, and status. It applies the declared authority policy to distinguish accepted commitments from hypotheses and to identify unresolved conflicts. This prevents an observed output from becoming a requirement merely because it appeared in a feedback message. [S1], Sections 3.1-3.2.
+The user supplies the intended interpretation, while the execution harness supplies observations about specific runs. The evidence resolver stores both through a typed ledger interface that records source, subject, version, scope, and status. It applies the declared authority policy to distinguish accepted commitments from hypotheses and to identify unresolved conflicts. This prevents an observed output from becoming a requirement merely because it appeared in a feedback message.
 
 An illustrative clarification record is:
 
@@ -164,6 +208,20 @@ Trace:
 
 The ledger can contain E17 and E18 consistently: one states the desired meaning and the other reports an execution that differs from it. The resolver must retain this distinction when constructing context for an LLM. A compiler diagnostic, a model hypothesis, and a user clarification similarly require separate roles even when all are serialized as text. If equally authoritative records conflict and the policy supplies no justified precedence, the controller records a conflict instead of selecting whichever statement arrived last.
 
+The evidence resolver uses an explicit policy rather than allowing the model to rank sources by confidence of expression. A user-ratified clock rule can determine task meaning, a compiler can report a type error, and a harness can establish what an execution returned. A compiler diagnostic cannot grant permission to overwrite a file, and a successful run cannot ratify its own expected answer. These distinctions are implemented as rules over record kinds, issuer authority, scope, version, and supersession links.
+
+```text
+RESOLVE_EVIDENCE(ledger, policy, currentSubject):
+  validate each record's issuer and permitted claim kind
+  retain observations with their original run and artifact IDs
+  follow authorized supersession links for normative records
+  select commitments applicable to currentSubject
+  detect conflicting applicable commitments
+  return active facts, accepted commitments, unresolved conflicts
+```
+
+For example, E19 may be an authorized correction stating that an earlier expected value in E17 was entered incorrectly. The resolver preserves E17 as history, marks its affected commitment superseded by E19, and invalidates conclusions that depended on that expectation. It does not erase the execution observation E18, because the old implementation still produced the recorded output on that run. The dependency manager then reconstructs the affected reasoning from the preserved base and the remaining justified evidence.
+
 The fourth step diagnoses the layer that requires repair.
 
 The diagnostic component reads accepted meanings, observed traces, code models, and dependency records. It proposes competing explanations through model inspection, explicit rules, or an LLM constrained to produce labeled hypotheses. The test generator then constructs scenarios on which those explanations predict different observations. The harness validates the scenarios and executes admitted probes so that the diagnosis rests on evidence rather than on the fluency of a proposed explanation.
@@ -199,7 +257,7 @@ The test generator adds a second fixture in which both clocks increase in the sa
 | H2 | R102 | R302 |
 | H3 | R101 | R301 |
 
-The manuscript describes a disagreement score that the scheduler can use to prioritize tests. The diagnostic component supplies a finite set of hypotheses, and each model supplies its predicted observable result for a scenario. The scheduler counts pairs with different predictions and divides by the number of unordered pairs. This score measures disagreement within the current hypothesis collection, rather than the probability that a scenario reveals the true explanation. [S1], Section 3.3.
+The scheduler uses a pairwise disagreement score to prioritize tests that separate competing explanations. The diagnostic component supplies a finite set of hypotheses, and each model supplies its predicted observable result for a scenario. The scheduler counts pairs with different predictions and divides by the number of unordered pairs. This score measures disagreement within the current hypothesis collection, rather than the probability that a scenario reveals the true explanation.
 
 ```text
 m = number of surviving hypotheses
@@ -248,7 +306,71 @@ An illustrative typed patch follows. The elaborator may propose its fields, but 
 }
 ```
 
-The proposed finite revision operator can rank feasible alternatives using explicit removal, addition, and representation costs. The policy owner supplies the weights and the allowed assumption pool, while the revision engine performs the search. Accepted requirements enter as constraints rather than preferences that the optimizer can trade away for a cheaper change. A candidate that retains arrival-time semantics after E17 is infeasible regardless of its low editing cost. [S1], Section 3.4.
+The revision engine needs a precise meaning for a defeasible default. A default is a rule that licenses a conclusion when its prerequisite is established and its justification remains consistent with the proposed completed interpretation. It differs from a hard requirement because later evidence can defeat its use without changing the protected task. The rule author supplies its prerequisite, justification, conclusion, and provenance; the rule validator decides whether the proposed use is permitted.
+
+```text
+Default rule:
+  d = (alpha : beta / gamma)
+
+alpha:
+  Prerequisite that must already be derivable.
+
+beta:
+  Justification that must remain consistent with the candidate
+  completed interpretation.
+
+gamma:
+  Conclusion licensed by the rule.
+
+The colon and slash separate rule fields; they are not arithmetic.
+```
+
+For the clock example, define InitialClockGap(c) to mean that the original occurrence c did not specify a clock. Define Arrival(c) to mean that its selector uses arrival time, and Event(c) to mean that it uses event time. A provisional rule can license Arrival(c) from InitialClockGap(c), provided Arrival(c) remains consistent with the completed interpretation. An exclusivity axiom states that Event(c) and Arrival(c) cannot both be the chosen primary clock.
+
+```text
+d_arrival = (
+  InitialClockGap(c) : Arrival(c) / Arrival(c)
+)
+
+Before clarification:
+  InitialClockGap(c) is established.
+  No accepted commitment excludes Arrival(c).
+  The arrival default can support a provisional interpretation.
+
+After accepted event-time clarification:
+  Event(c) is established.
+  The exclusivity axiom entails NOT Arrival(c).
+  The arrival default's justification is defeated.
+  The old rule can remain stored without producing Arrival(c).
+```
+
+The phrase "completed interpretation" is important because checking a default against only the facts available at an early intermediate step can license a conclusion that conflicts with later consequences of the same candidate. The engine therefore validates a candidate extension against itself. An extension is a set of conclusions that can be regenerated from the hard base and applicable defaults when their justifications are checked against that same set. A merely satisfiable assignment may contain unsupported conclusions, so satisfiability alone does not establish extension validity.
+
+For a finite propositional implementation, let W be the hard base, D the finite default set, and X a proposed consistent extension. Let Cn(B) mean the classical consequences of base B over the declared finite atom vocabulary; an implementation represents this closure through models or a finite canonical encoding rather than listing every equivalent formula. The validator starts with the consequences of W and repeatedly adds licensed rule conclusions. It checks every justification against X, while checking prerequisites against the growing derived set Y.
+
+```text
+VALID_EXTENSION(W, D, X):
+  require X is consistent
+  Y = Cn(W)
+
+  repeat:
+    additions = all gamma from rules (alpha : beta / gamma)
+                where Y entails alpha
+                and X does not entail NOT beta
+
+    nextY = Cn(Y union additions)
+    if nextY is logically equivalent to Y:
+      return X is logically equivalent to Y
+    Y = nextY
+```
+
+The fixed-point comparison prevents an arbitrary unsupported assertion from entering X. For example, if no hard fact or applicable rule licenses a permission to overwrite the input, adding that permission to a candidate does not make it a valid extension. With a finite atom vocabulary, classical entailment can be decided by enumerating truth assignments, although this can be expensive. With finitely many default conclusions, the inner loop can introduce only finitely many distinct conclusions before it stabilizes.
+
+The outer validator can enumerate subsets of rule conclusions, close each subset together with W, and test the resulting candidate X. For m defaults there are at most 2^m subsets of conclusions, with duplicate closures discarded. This construction establishes a finite search procedure for the declared fragment, not practical scalability for arbitrary natural-language rules. An optimized solver can replace enumeration only if it preserves the chosen semantics or reports the limits of its search.
+
+Conflicting defaults can produce multiple valid extensions. For example, equally eligible arrival and event defaults plus the exclusivity axiom can support two separate interpretations. The controller must preserve the alternatives or apply an explicitly authorized selection rule; it cannot combine their incompatible clock choices into one accepted meaning. An accepted event-time fact removes the arrival alternative by defeating its justification, while the original input-preservation requirement remains hard in both cases.
+
+The proposed finite revision operator can rank feasible alternatives using explicit removal, addition, and representation costs. The policy owner supplies the weights and the allowed assumption pool, while the revision engine performs the search. Accepted requirements enter as constraints rather than preferences that the optimizer can trade away for a cheaper change. A candidate that retains arrival-time semantics after E17 is infeasible regardless of its low editing cost.
 
 ```text
 D_new = (D0 minus R) union A
@@ -274,13 +396,35 @@ cost(R, A, X) =
 
 For illustration, let removing the arrival default cost 2, adding an event-time default cost 1, `lambda = 1`, `eta = 0.1`, and the resulting representation size be 3. This candidate has cost `2 + 1 * 1 + 0.1 * 3 = 3.3`. The calculation evaluates one candidate; it does not prove that the candidate is optimal. The engine must compare all relevant feasible alternatives, or report that its search is incomplete.
 
-There is a further distinction between defeating a conclusion and deleting its rule. If an accepted event-time fact makes the arrival default inapplicable under the declared default semantics, the old rule can remain dormant without licensing the wrong interpretation. Physically removing that rule and adding another default may therefore be unnecessary and more expensive. The manuscript explicitly identifies this possibility, so the example cost of 3.3 must not be presented as the inevitable revision cost.
+There is a further distinction between defeating a conclusion and deleting its rule. If an accepted event-time fact makes the arrival default inapplicable under the declared default semantics, the old rule can remain dormant without licensing the wrong interpretation. Physically removing that rule and adding another default may therefore be unnecessary and more expensive. The engine must compare this dormant-rule alternative with physical replacement before claiming a minimum, so 3.3 is only the cost of the particular replacement being illustrated.
 
 Canonical revision also requires a stable optimization problem. The controller fixes the epoch base, admissible candidate construction, weights, evidence policy, and tie-break rule when claiming a canonical result. A local repair procedure that optimizes against the current state can be useful, but its answer may depend on the order in which evidence arrived. The implementation must distinguish those policies instead of claiming order independence for an arbitrary sequence of prompt edits.
 
+The finite revision search can now be specified without an undefined "repair" operation. The policy supplies D0, a finite pool A0 of allowed replacement assumptions, nonnegative costs, and a fixed tie-break order. The engine enumerates each removal subset R of D0 and addition subset A of A0, constructs D_new, and asks the extension validator for admissible interpretations. It discards candidates failing protected intent, accepted commitments, types, authority, or other mandatory constraints before comparing their costs.
+
+```text
+SELECT_REVISION(hardBase, D0, A0, policy):
+  feasible = empty
+  for each R contained in D0:
+    for each A contained in A0:
+      D_new = (D0 minus R) union A
+      for each valid consistent extension X of (hardBase, D_new):
+        if mandatory admission constraints hold for X:
+          record (R, A, X, cost(R, A, X)) in feasible
+
+  if enumeration was interrupted:
+    report SearchIncomplete and any provisional candidates
+  else if feasible is empty:
+    report NoRevisionInDeclaredUniverse
+  else:
+    return the minimum-cost candidate under the fixed tie-break
+```
+
+If D0 contains k defaults and A0 contains j replacement assumptions, the subset search contains at most `2^k * 2^j` removal-and-addition combinations before extension validation. The input counts k and j describe the declared search space, not the length of the English prompt. A timeout can leave a useful feasible candidate but cannot establish that it is globally cheapest. A controller using a local search mode may accept such a candidate under that mode's policy, while withholding a canonical-minimum claim.
+
 The sixth step invalidates the consequences of the defeated interpretation.
 
-The dependency manager reads the changed justification nodes and the graph that links assumptions to meanings, code, expectations, and certificates. It performs a reachability traversal, using a visited set to handle cycles, and marks reachable current justifications stale. Negative dependencies also matter when a rule's applicability depends on the absence of a conflicting conclusion. The purpose is to prevent an old result from surviving merely because its originating assumption was changed elsewhere. [S1], Section 3.5.
+The dependency manager reads the changed justification nodes and the graph that links assumptions to meanings, code, expectations, and certificates. It performs a reachability traversal, using a visited set to handle cycles, and marks reachable current justifications stale. Negative dependencies also matter when a rule's applicability depends on the absence of a conflicting conclusion. The purpose is to prevent an old result from surviving merely because its originating assumption was changed elsewhere.
 
 | Artifact | Dependency | Required treatment |
 | --- | --- | --- |
@@ -292,13 +436,30 @@ The dependency manager reads the changed justification nodes and the graph that 
 | Input protection | Original prohibition | Preserve |
 | New-file requirement | Original output requirement | Preserve |
 
+The graph traversal has a concrete implementation even when the graph contains cycles. The dependency manager initializes a queue with the changed justifications and records every visited node in a set. For each node it removes from the queue, it marks that justification stale and enqueues its dependents that have not yet been visited. A finite graph then requires at most one visit per node and one examination per outgoing edge of a visited node.
+
+```text
+INVALIDATE(changedNodes, dependents):
+  queue = changedNodes
+  visited = empty set
+  while queue is not empty:
+    node = remove one item from queue
+    if node is not in visited:
+      add node to visited
+      mark node's current justification stale
+      append dependents(node) to queue
+  return visited
+```
+
+This procedure is conservative only if the graph contains every relevant dependency. To see why, consider any justification that relies on a changed premise through a finite chain. Traversal reaches the first dependent, then the next, and eventually the entire chain, so the final justification becomes stale before reuse. A missing edge breaks that argument, which is why dependency completeness is an explicit assumption and must include consistency conditions as well as ordinary data dependencies.
+
 Invalidating a justification does not always delete the underlying artifact permanently. An independent justification may allow the dependency manager to re-establish part of the state after recomputation. Conversely, a previously passing test whose expected answer depended on arrival-time semantics cannot remain a mandatory correctness condition after that meaning is defeated. The controller preserves still-valid obligations rather than treating every historical expected answer as immutable.
 
 The seventh step asks a rewriting component to express the selected change.
 
 The revision engine supplies a selected semantic patch, and the evidence resolver supplies its accepted supporting records. The rewriting component receives those inputs together with the current clause, protected requirements, permitted edit scope, and unresolved questions. Through an LLM generation call or a typed-edit procedure, it proposes replacement wording and source mappings. Its purpose is to express the justified change without silently reconstructing the entire task from incomplete context.
 
-The following is an illustrative instruction package for that component. It is an operational expansion of the architecture rather than a verbatim prompt from the manuscript. An implementation can request a structured response containing patch fields, proposed wording, evidence identifiers, and unresolved obligations. The checker must still validate those fields after parsing the response.
+The following is an illustrative instruction package for that component. It specifies the exact task context, permitted changes, and response fields for one bounded rewriting call. An implementation can request a structured response containing patch fields, proposed wording, evidence identifiers, and unresolved obligations. The checker must still validate those fields after parsing the response.
 
 ```text
 Produce a candidate revision for construct C_latest.
@@ -371,7 +532,7 @@ Rendered clause:
   occurredAt interpreted as a chronological instant.
 ```
 
-The proposed architecture can combine LLM-authored clauses with deterministic rendering. The inspected Scala prototype relies heavily on deterministic templates after its task fields have passed external checks. In both cases, the final words come from retained strings or template substitutions. The embedding component scores textual candidates but does not supply an inverse operation that turns a target vector into the intended sentence.
+The proposed architecture can combine LLM-authored clauses with deterministic rendering. The Scala reference prototype relies heavily on deterministic templates after its task fields have passed external checks. In both cases, the final words come from retained strings or template substitutions. The embedding component scores textual candidates but does not supply an inverse operation that turns a target vector into the intended sentence.
 
 The eighth step checks semantic obligations and geometric bounds.
 
@@ -379,7 +540,7 @@ The admission checker receives the candidate patch and wording from the rewritin
 
 For example, "Do not overwrite the input file" and "Overwrite the input file" concern the same resource and action but authorize opposite behavior. An embedding encoder can assign them nearby vectors. The authority and effect checks must therefore examine the prohibition directly. Geometric proximity alone cannot establish that the replacement is admissible.
 
-The geometric checker supplies an additional bound on candidate movement. The controller records a fixed encoder configuration, canonical clause context, reference vector, and permitted radii. The embedding service maps each candidate string to a vector, and deterministic numerical code normalizes the vector and computes distances. The checker rejects or separately handles zero or nonfinite vectors because they do not provide valid normalized-distance evidence. The manuscript notes that the inspected prototype does not enforce every one of these stronger validity checks. [S1], Sections 4.1, 4.5, and 7.3.
+The geometric checker supplies an additional bound on candidate movement. The controller records a fixed encoder configuration, canonical clause context, reference vector, and permitted radii. The embedding service maps each candidate string to a vector, and deterministic numerical code normalizes the vector and computes distances. A complete geometric checker must reject or separately handle zero or nonfinite vectors because they do not provide valid normalized-distance evidence. The reference prototype does not enforce every one of these stronger validity checks, so the complete checker described here is an additional implementation obligation.
 
 ```text
 z0:
@@ -426,11 +587,17 @@ Suppose the policy uses the illustrative bounds `R = 0.30` and `r = 0.25`. A can
 
 Candidate B shows why a small local edit does not imply bounded cumulative drift. A long sequence of locally small moves can leave the original neighborhood. The fixed reference bound limits that displacement at every accepted step. Actual radii require a declared calibration procedure, and the numerical values in this table are illustrative rather than recommended settings.
 
+The cumulative bound follows directly from the two acceptance conditions. If every admitted vector is checked against the fixed reference z0 with radius R, every admitted state is within R of that reference by construction. With only a local radius r, the triangle inequality gives `distance(zn, z0) <= n * r` after n moves. On the real line, successive moves of length r achieve that bound; on the unit sphere the distance is capped at 2, but can still leave any smaller intended neighborhood.
+
+The calibration owner supplies a separate collection of approved elaborations and labeled scope changes for each relevant clause context. The geometric checker measures distances under the frozen encoder, and the calibration procedure chooses radii according to a declared tradeoff between excluding useful rewrites and admitting misleading ones. For example, increasing R may admit more valid elaborations while also admitting sentences that reverse a prohibition. The controller retains explicit semantic checks because no empirical distance threshold establishes the meaning of every unseen sentence inside the region.
+
+If all semantically correct candidates lie outside the declared radius, the controller cannot quietly increase the radius and retain the old guarantee. An authorized re-anchoring or changed bound starts a new applicable geometric configuration and triggers the required revalidation. A complete search of the bounded candidate universe can establish that no admissible realization exists there. A sampled search that finds none can establish only that its own search did not succeed.
+
 The ninth step renders the candidate prompt for a particular worker.
 
 The prompt renderer reads admitted task fields, protected requirements, the assigned role, the current repair package, and relevant evidence. It assembles the worker's instructions through templates and accepted text fragments. This operation produces a concrete prompt string whose instructions can be traced back to their sources. A role-specific prompt can include only the relevant portion of the complete state, provided that this selection preserves the obligations needed for the assigned work.
 
-The following notation uses `U_t` for the rendered prompt at revision `t`. The manuscript uses other symbols for workflows, so this document keeps the prompt and executable program distinct. `Render` denotes the application procedure that assembles text, not a claim that one universal prompt template solves every task. Its inputs describe the information that the procedure must account for.
+The following notation uses `U_t` for the rendered prompt at revision `t`. The index t counts revisions, and the executable workflow remains a separate object containing operations, arguments, and resource bindings. `Render` denotes the application procedure that assembles text, not a claim that one universal prompt template solves every task. Its inputs describe the information that the procedure must account for.
 
 ```text
 U_t = Render(
@@ -539,6 +706,28 @@ Comparison:
   recordId.
 ```
 
+The functional obligation can also be expressed independently of any generated program. Let X be the finite validated input collection, X_c the records whose customerId equals c, and C_X the distinct customer identifiers present in X. Let N parse a supported timestamp into an instant on a common time scale. Define K(r) as the pair containing N(r.occurredAt) and r.recordId, and let winner(X_c) be the record with the greatest K under the accepted lexicographic order.
+
+```text
+X_c = records r in X with r.customerId = c
+C_X = distinct customerId values occurring in X
+K(r) = (N(r.occurredAt), r.recordId)
+
+Required output Y:
+  count(Y) = count(C_X)
+  for every c in C_X:
+    exactly one y in Y has customerId = c
+    that y equals winner(X_c)
+
+Separate frame and effect obligations:
+  all protected input contents remain unchanged
+  completed output is published only at a fresh destination
+```
+
+The maximum exists because every X_c is finite and nonempty and the accepted key order is total on valid inputs. The maximum is unique because the identifier rule prevents two distinct valid records from sharing the same full key. Generating exactly one such winner for each c gives `count(C_X)` output records, and the cardinality condition excludes additional invented records. For empty valid input, C_X and Y are both empty; the output format and publication binding still determine how an empty result is represented.
+
+The workflow implements this obligation by validating the input, grouping by customerId, computing each key, and selecting each group's maximum. A proof for this workflow depends on the parser, grouping operation, comparison, and serializer satisfying their declared contracts. The no-overwrite property requires an output-creation operation whose success contract excludes replacing an existing resource, including concurrent creation by another process. Checking that a path is absent and then opening it with overwrite enabled does not establish that property because another process can create the path between those operations.
+
 The renderer can now emit a more complete candidate prompt. Every added policy is supported by accepted evidence, and each implementation obligation is connected to the corresponding meaning. The output resource binding must implement the required no-overwrite and publication behavior; a sentence in the prompt cannot create a missing storage guarantee. Where the resource lacks the required primitive, the binding controller must resolve that obligation before release.
 
 ```text
@@ -609,7 +798,7 @@ The following mapping allows a reviewer to trace the new instructions. The rende
 
 The twelfth step validates and activates a coordinated version.
 
-The controller assembles a candidate containing compatible versions of the specification, meanings, prompt, code, tests, bindings, and manifest. It computes an identifier from a declared canonical serialization and associates each check with the exact artifacts examined. The verifier reads the candidate and the applicable obligations, then runs or checks the required evidence-producing procedures. The activation controller checks freshness immediately before making the candidate active. [S1], Sections 8.1-8.5.
+The controller assembles a candidate containing compatible versions of the specification, meanings, prompt, code, tests, bindings, and manifest. It computes an identifier from a declared canonical serialization and associates each check with the exact artifacts examined. The verifier reads the candidate and the applicable obligations, then runs or checks the required evidence-producing procedures. The activation controller checks freshness immediately before making the candidate active.
 
 ```text
 Illustrative candidate bundle:
@@ -687,9 +876,9 @@ required handoff to SourceAgent.
 Claim completion only when the required evidence is available.
 ```
 
-The inspected Scala prototype supplies a narrower, concrete prompt-generation procedure.
+The Scala reference prototype supplies a bounded, concrete prompt-generation procedure.
 
-The manuscript's source audit identifies `PromptCompiler.compile`, `Ratifier.checkTask`, canonicalization, and the renderer in `PromptRenderer.scala`. The engineer-supplied `EngineerIntent` already contains rich normalized task fields. The compiler asks the model to reproduce the corresponding TaskIR values, and the external ratifier compares its output with the authoritative input. After acceptance, canonicalization restores the authoritative values and ordering, and Scala interpolation produces the routing request and specialist prompt. [S1], Sections 7.2-7.4.
+In the reference prototype, `PromptCompiler.compile` requests a TaskIR proposal, `Ratifier.checkTask` compares its fields with the supplied intent, and the canonicalizer and renderer prepare accepted fields for string interpolation in `PromptRenderer.scala`. The engineer-supplied `EngineerIntent` already contains rich normalized task fields. The compiler asks the model to reproduce the corresponding TaskIR values, and the external ratifier compares its output with the authoritative input. After acceptance, canonicalization restores the authoritative values and ordering, and Scala interpolation produces the routing request and specialist prompt.
 
 | Stage | Input source | Actor and mechanism | Purpose |
 | --- | --- | --- | --- |
@@ -700,7 +889,7 @@ The manuscript's source audit identifies `PromptCompiler.compile`, `Ratifier.che
 | Canonicalize | Admitted proposal and original intent | Deterministic canonicalization | Restore authoritative values and order |
 | Render | Canonical TaskIR and selected phrases | Scala string interpolation | Create routing and specialist text |
 
-The audited model adapter is `OllamaClient.generateJson`. It sends a generation request with system and user prompts, a JSON schema, seed, temperature, top-p, and context limit; the snapshot also requests nonstreaming output. The adapter parses the response as JSON, after which Scala code performs call-specific checks. A schema-shaped response establishes a formatting boundary, while the ratifier supplies the relevant external field comparisons. These details describe the inspected snapshot, not a guarantee about every later implementation or current model release.
+The reference prototype's model adapter is `OllamaClient.generateJson`. It sends a generation request with system and user prompts, a JSON schema, seed, temperature, top-p, and context limit; the snapshot also requests nonstreaming output. The adapter parses the response as JSON, after which Scala code performs call-specific checks. A schema-shaped response establishes a formatting boundary, while the ratifier supplies the relevant external field comparisons. These operations define the behavior of this reference adapter; a deployment must separately verify the request and response contracts supported by its chosen model server.
 
 Suppose the authoritative write set contains only `build.sbt`, but the model adds `src/main/scala/**`. The ratifier's normalized-set comparison detects the extra scope and rejects the proposal. The compiler can include the deviation in another bounded attempt, asking for exactly the accepted fields. If the attempt budget is exhausted, the controller reports rejection rather than rendering the last invalid proposal.
 
@@ -718,11 +907,57 @@ Repair feedback:
   return exactly the accepted task fields.
 ```
 
-The manuscript calls this checked copying because the normalized task facts are already present in the input. The result demonstrates proposal admission and field preservation, but it does not establish general ambiguity resolution from arbitrary English. A deterministic conversion from EngineerIntent can produce the same admitted values without a model call. The renderer's output likewise does not establish that a later tool-bearing agent will obey it.
+This procedure performs checked copying because the normalized task facts are already present in the input. The result demonstrates proposal admission and field preservation, but it does not establish general ambiguity resolution from arbitrary English. A deterministic conversion from EngineerIntent can produce the same admitted values without a model call. The renderer's output likewise does not establish that a later tool-bearing agent will obey it.
+
+The ratifier's operation can be understood through a deterministic comparison procedure. The engineer supplies canonical scalar fields such as owner and operation and collection-valued fields such as allowed writes. The ratifier trims scalar strings, normalizes collection values according to its declared set policy, and reports each difference between the proposal and the authoritative intent. After all comparisons succeed, the canonicalizer uses the original authoritative values rather than allowing harmless formatting variation to create a new task version.
+
+```text
+CHECK_TASK(intent, proposal):
+  deviations = empty
+  for each required scalar field f:
+    if trim(proposal[f]) != trim(intent[f]):
+      record deviation for f
+  for each required set-valued field f:
+    if normalizeSet(proposal[f]) != normalizeSet(intent[f]):
+      record deviation for f
+  return deviations
+
+COMPILE_TASK(intent, attemptBudget):
+  feedback = empty
+  repeat at most attemptBudget times:
+    proposal = request structured TaskIR from the model
+               using intent and previous feedback
+    feedback = CHECK_TASK(intent, proposal)
+    if feedback is empty:
+      return canonical TaskIR constructed from intent
+  return Rejected with the recorded deviations
+```
+
+The pseudocode shows why the acceptance decision is external to the generation call. Even if the model labels its proposal correct, an extra write path remains a set mismatch. Conversely, exact agreement with an input contract cannot repair a mistaken contract supplied by the engineer; that requires a different evidence and revision operation. The compiler's guarantee is field preservation under the declared comparison rules, while execution correctness remains the verifier's responsibility.
 
 The optional anchor mechanism selects useful wording from retained candidate strings.
 
-The candidate collector obtains phrases from engineer-provided terms, agent metadata, rival metadata, diagnostic controls, and optionally model-generated suggestions. Each candidate retains its original string, source, and selection eligibility. `AnchorDiscovery.discover` uses the embedding adapter and agent reference centroids to compare candidate phrases with the target and rival regions. A behavioral probe also inserts a candidate into requests and measures the router's returned owner identifiers. [S1], Section 7.6.
+The candidate collector obtains phrases from engineer-provided terms, agent metadata, rival metadata, diagnostic controls, and optionally model-generated suggestions. Each candidate retains its original string, source, and selection eligibility. `AnchorDiscovery.discover` uses the embedding adapter and agent reference centroids to compare candidate phrases with the target and rival regions. A behavioral probe also inserts a candidate into requests and measures the router's returned owner identifiers.
+
+An embedding is a numeric vector returned by the fixed encoder for a specific string and context. For agent a, the collector gathers reference descriptions and labeled requests, and the geometry code takes their vector mean as a representative center. If that mean is nonzero, normalization gives a unit centroid c_a. For a candidate phrase with normalized vector z, the geometric margin compares its similarity to the intended agent with its strongest similarity to any rival.
+
+```text
+v_(a,j) = encoder vector for reference string j of agent a
+k_a = number of reference strings for agent a
+
+mean_a = sum(v_(a,j) for j from 1 to k_a) / k_a
+c_a = mean_a / norm(mean_a)
+
+z = normalized encoder vector for the candidate phrase
+target = intended agent
+
+margin(z) = dot(z, c_target)
+            - max(dot(z, c_b) for rival agents b)
+```
+
+The geometric checker must reject an empty reference set or a zero mean instead of treating an undefined centroid as ordinary evidence. For unit vectors, each dot product is a cosine similarity. If a candidate has target similarity 0.82 and strongest-rival similarity 0.69, its margin is 0.13. This is a representation-space comparison under the chosen encoder and reference collection, not the probability that the generative router will choose the correct owner.
+
+The behavioral probe is necessary because the generative router can respond differently from a nearest-centroid model. The harness uses the same declared schedule of cases and seeds to compare requests with and without the phrase. The embedding score can prioritize candidate text, while actual returned agent identifiers measure the intervention's effect under that schedule. Neither measurement grants ownership that the authority policy does not already allow.
 
 Examples of retained strings include `build.sbt`, `libraryDependencies`, and "dependency version declaration." These phrases can clarify a relevant operation when the surrounding context supports them. A candidate's provenance and intended role remain necessary because a related phrase can broaden an ownership claim incorrectly. The geometric and behavioral filters supply measured evidence about a candidate, not independent authority to change the task.
 
@@ -742,11 +977,11 @@ behavioralScore = g - gamma * s
 
 For the illustrative values `g = 0.40`, `s = 0.10`, and `gamma = 2`, the score is `0.40 - 2 * 0.10 = 0.20`. The candidate helps the target on positive cases but also pulls some requests away from other owners. The penalty expresses that tradeoff in the declared evaluation. These numbers are a worked calculation, not measured performance of a particular phrase.
 
-The prototype combines source eligibility, geometric margin, behavioral score, and positive gain when selecting anchors. It retains the strings alongside their vectors and ultimately inserts `phrase.text` into the renderer. Anchor discovery is optional and disabled by default in the audited configuration. The manuscript also notes that passing its numerical filters does not separately establish full semantic equivalence or preservation of every authority constraint.
+The prototype combines source eligibility, geometric margin, behavioral score, and positive gain when selecting anchors. It retains the strings alongside their vectors and ultimately inserts `phrase.text` into the renderer. Anchor discovery is optional and disabled by default in the reference configuration. Passing the numerical filters does not establish full semantic equivalence or preservation of every authority constraint, so those properties require their own checks.
 
 Catalog repair changes persistent descriptions and must be evaluated separately from one task prompt.
 
-The routing harness supplies a failing development case with an expected owner derived from the supplied labels and an observed rival selected by the model. The repair component proposes restricted description additions using the declared vocabulary. The controller appends a positive clause to the intended owner's description and a corresponding qualification or exclusion to the rival's description. It then reruns the development suite to check the consequences for previously passing cases. [S1], Sections 4.6 and 7.5.
+The routing harness supplies a failing development case with an expected owner derived from the supplied labels and an observed rival selected by the model. The repair component proposes restricted description additions using the declared vocabulary. The controller appends a positive clause to the intended owner's description and a corresponding qualification or exclusion to the rival's description. It then reruns the development suite to check the consequences for previously passing cases.
 
 Under the example ownership policy, a useful paired change could be:
 
@@ -760,15 +995,15 @@ SourceAgent qualification:
   the current ownership policy.
 ```
 
-A broad addition such as "handles dependency problems" might fix a declaration route while stealing an API-adaptation request. The development harness must therefore replay cases for both agents and protect already passing boundaries. In the audited prototype, an edit is admitted only when protected passing cases do not regress and the failure count decreases, or an equal failure count accompanies a sufficient mean-margin improvement. The manuscript identifies a separate limitation: these empirical checks do not by themselves prove that a proposed ownership clause follows from an authoritative ownership matrix.
+A broad addition such as "handles dependency problems" might fix a declaration route while stealing an API-adaptation request. The development harness must therefore replay cases for both agents and protect already passing boundaries. In the reference prototype, an edit is admitted only when protected passing cases do not regress and the failure count decreases, or an equal failure count accompanies a mean-margin improvement greater than 0.01. These empirical checks do not prove that an ownership clause follows from an authoritative ownership matrix; the permission checker must additionally establish that connection.
 
 Routing measurements also require careful interpretation. If five scheduled calls select the expected owner four times and a rival once, the expected-owner frequency is `4 / 5 = 0.8`. The empirical margin over that rival is `(4 - 1) / 5 = 0.6`. These are frequencies under a finite schedule, not posterior probabilities of semantic correctness, and a forbidden-owner selection can still cause rejection under the declared policy.
 
-The inspected prototype asks a plan probe to describe proposed writes, commands, effects, evidence, and handoffs without executing tools. The ratifier checks that structured plan under a finite perturbation schedule. The manuscript reports no integrated specialist loop in the inspected source that applies the selected prompt through a tool-bearing coding agent to perform the requested repository change. Consequently, routing and plan-probe success cannot be presented as evidence that the edit was actually executed correctly. [S1], Sections 7.2 and 7.7.
+The reference prototype asks a plan probe to describe proposed writes, commands, effects, evidence, and handoffs without executing tools. The ratifier checks that structured plan under a finite perturbation schedule. This reference prototype does not include an integrated specialist execution loop that applies the selected prompt through a tool-bearing coding agent to perform the requested repository change. Consequently, routing and plan-probe success cannot be presented as evidence that the edit was actually executed correctly.
 
 The following pseudocode makes the proposed prompt-update operation explicit.
 
-The input state comes from the controller's current versioned task records, artifacts, evidence, and remaining budget. Feedback comes from an identified user, harness, compiler, resource monitor, or other permitted source. The procedure delegates each transformation to the responsible component and preserves explicit unresolved outcomes. It is an explanatory composition of the manuscript's algorithms rather than an assertion that this exact function exists in the inspected Scala program.
+The input state comes from the controller's current versioned task records, artifacts, evidence, and remaining budget. Feedback comes from an identified user, harness, compiler, resource monitor, or other permitted source. The procedure delegates each transformation to the responsible component and preserves explicit unresolved outcomes. It defines the component contracts and control flow for the full controller; the reference Scala harness implements only the narrower compilation, routing, and plan-probing operations explained above.
 
 ```text
 GENERATE_UPDATED_PROMPT(state, feedback):
@@ -861,7 +1096,7 @@ The candidate text exists before release acceptance. A controller may retain pro
 
 Convergence claims describe specific progress conditions and endpoints.
 
-The policy owner fixes the candidate universe, evaluation rule, relevant labels, and manifest for a theorem's scope. The controller admits edits only when they satisfy the declared progress and preservation conditions. The verifier then evaluates the actual sequence against those premises. Repeated rewriting alone establishes neither that progress continues nor that a correct prompt exists inside the chosen bounds. [S1], Sections 4.6, 5.5-5.11, and 8.2.
+The policy owner fixes the candidate universe, evaluation rule, relevant labels, and manifest for a theorem's scope. The controller admits edits only when they satisfy the declared progress and preservation conditions. The verifier then evaluates the actual sequence against those premises. Repeated rewriting alone establishes neither that progress continues nor that a correct prompt exists inside the chosen bounds.
 
 For a finite illustration, suppose the harness uses 12 fixed tests and the initial candidate passes 8. Assume every admitted update preserves every previously passing test and makes at least one additional test pass. After k admitted updates, at least `8 + k` tests pass, while no more than 12 can pass. Therefore, at most `12 - 8 = 4` such improving updates can be admitted.
 
@@ -869,7 +1104,60 @@ This argument bounds accepted improvements, not rejected proposals or total sear
 
 Different prompt strings can also implement equivalent accepted behavior. A deterministic rendering policy can select one textual form, but behavioral acceptance does not require a universally unique English sentence. Conversely, an unchanged prompt can remain wrong if the search repeatedly fails to find a repair. The endpoint must be defined in terms of the declared semantic, execution, and verification obligations.
 
-The controller and verifier use explicit outcome labels to express these distinctions. An implementation should document its exact status vocabulary and the evidence required for each label. The following labels collect the relevant outcomes discussed in the manuscript and this operational walkthrough. Their meaning must remain tied to the supported checks rather than to optimistic release wording.
+A separate acceptance argument explains preservation of protected execution invariants. Assume the initial active configuration satisfies the invariant, every activation passes a gate that soundly establishes the invariant for the actual candidate and relevant world state, and activation is atomic relative to the checked versions. Also assume every admitted environmental transition between activations preserves the invariant. Under these premises, induction on transitions shows that every resulting active state satisfies the invariant.
+
+The induction has two cases. A rejected candidate does not replace the active configuration, and an allowed environment transition preserves the invariant by assumption. An accepted candidate satisfies the invariant because the sound gate established it and atomic activation ensures that the checked preconditions still apply. If the environment can independently violate the invariant or an effect bypasses mediation, the premises fail and the controller must not claim this guarantee.
+
+A conditional contraction model supplies a different kind of convergence statement for a specialist state space. Let X be a nonempty complete metric space of admissible specialist states, d its distance function, and F a fixed deterministic update map from X into X. Completeness means that every sequence whose later states become arbitrarily close to one another has a limit inside X. Suppose a constant q with `0 <= q < 1` satisfies `d(F(x), F(y)) <= q * d(x, y)` for every pair of admissible states x and y.
+
+Starting from x0, define `x_(n+1) = F(x_n)` and `a = d(x1, x0)`. Repeated application of the contraction inequality gives `d(x_(n+1), x_n) <= q^n * a`. For any m greater than n, the triangle inequality bounds the distance from x_n to x_m by the sum of those consecutive distances. Bounding that finite sum by its infinite geometric tail gives the following result.
+
+```text
+d(x_m, x_n)
+  <= a * (q^n + q^(n+1) + ... + q^(m-1))
+  <= a * q^n / (1 - q)
+```
+
+Because q is less than 1, the upper bound tends to zero as n grows, uniformly for later m. The sequence is therefore Cauchy, and completeness supplies a limit x_star inside X. The contraction inequality makes F continuous, so the limits of `F(x_n)` and `x_(n+1)` agree and establish `F(x_star) = x_star`. If y_star were another fixed point, then `d(x_star, y_star) <= q * d(x_star, y_star)` would force zero distance, proving uniqueness.
+
+Taking the limit as m grows yields the computable error bound `d(x_n, x_star) <= a * q^n / (1 - q)`. For `0 < q < 1`, `a > 0`, and target tolerance epsilon greater than zero, a sufficient iteration count is the smallest nonnegative integer n satisfying `a * q^n / (1 - q) <= epsilon`. The logarithmic expression below comes from dividing by a, taking logarithms, and reversing the inequality when dividing by the negative number log(q). If a is zero, the initial state is already fixed; if q is zero, one application reaches the fixed point.
+
+```text
+n >= max(0, ceil(log(epsilon * (1 - q) / a) / log(q)))
+
+Illustration:
+  a = 0.20
+  q = 0.50
+  epsilon = 0.01
+
+  errorBound(n) = 0.20 * 0.50^n / 0.50
+                = 0.40 * 0.50^n
+
+  n = 5 gives 0.0125, which exceeds 0.01
+  n = 6 gives 0.00625, which is within 0.01
+```
+
+This theorem applies only if the stated complete state space and global contraction inequality are established for the update operator. Nearby prompt embeddings, a decreasing loss on a few trials, or repeated fluent rewrites do not establish those premises. A fixed point also needs a separate correctness condition: the state space or the verifier must connect it to the accepted task obligations. A repair procedure can stabilize at a wrong answer, and a model can keep returning the same text without making progress.
+
+Empirical confirmation supplies a different statement again. Suppose the verifier freezes one candidate, draws n independent trials from the declared deployment distribution, and uses a correct failure oracle on every trial. Each trial includes a fresh independent draw of any execution randomness covered by that distribution, and the execution protocol remains fixed so that all trials have the same failure probability. Let p be that unknown failure probability, and let delta be a chosen tail-probability threshold with `0 < delta < 1`. If no failures occur, the probability of that observation at failure rate p is `(1 - p)^n`.
+
+Solving `(1 - p)^n = delta` for p gives the one-sided zero-failure upper bound below. It excludes larger failure rates at the stated confidence level under the independent-sampling assumptions. The confidence concerns the repeated-sampling procedure; it is not a posterior probability assigned to this particular program. Inputs outside the sampled distribution and properties omitted by the oracle are outside this claim.
+
+```text
+p_upper = 1 - delta^(1 / n)
+
+Illustration:
+  n = 60
+  delta = 0.05
+  observed failures = 0
+
+  p_upper = 1 - 0.05^(1 / 60)
+          = approximately 0.0487
+```
+
+Thus 60 such successful confirmation trials yield an approximately 4.87 percent upper bound on the failure probability at 95 percent one-sided confidence under the declared assumptions. They do not establish zero failure probability. If the controller uses those trials to select or repair a candidate, the simple bound no longer applies as untouched confirmation of that adaptively chosen result. Fresh confirmation or an explicit policy controlling error across adaptive rounds is then required.
+
+The controller and verifier use explicit outcome labels to express these distinctions. An implementation should document its exact status vocabulary and the evidence required for each label. The following labels distinguish accepted results from unresolved choices, incomplete searches, and exhausted budgets. Their meaning must remain tied to the supported checks rather than to optimistic release wording.
 
 | Outcome | What it establishes |
 | --- | --- |
@@ -882,23 +1170,34 @@ The controller and verifier use explicit outcome labels to express these distinc
 | BudgetExhausted | Allotted attempts or resources were consumed |
 | NoRealizationWithinBounds | Complete search eliminated the declared bounded candidate universe |
 
-The source map below identifies the manuscript sections supporting the walkthrough. The complete prompt templates and example record names are pedagogical constructions in this document. Claims about Scala methods and prototype limits derive from the manuscript's source audit rather than a new execution or source inspection performed for this rewrite. The source document also provides the broader formal definitions, assumptions, and proofs for the conditional guarantees.
 
-| Topic | Source location in CONVERGE_Manuscript.pdf |
+The following vocabulary fixes the terms used throughout the procedure.
+
+| Term | Meaning and operational consequence |
 | --- | --- |
-| Protected intent and versioned controller state | Sections 2.3-2.4 |
-| Latest-record semantics and normalization | Section 2.5 |
-| Evidence, defaults, and diagnosis | Sections 3.1-3.3 |
-| Finite revision operator and dormant defaults | Section 3.4 |
-| Dependency invalidation and REVISE | Sections 3.5-3.6; Algorithm 2 |
-| Geometric representation and drift bounds | Sections 4.1 and 4.5 |
-| Catalog repair and finite progress | Section 4.6 |
-| Conditional convergence | Sections 5.5-5.11 |
-| Inspected execution sequence and model adapter | Sections 7.2-7.3 |
-| TaskIR checking and prompt rendering | Section 7.4 |
-| Routing measurements and catalog implementation | Section 7.5 |
-| Anchor collection and selection | Section 7.6 |
-| Plan probes and execution limitations | Section 7.7 |
-| Full controller, acceptance, and activation | Sections 8.1-8.5; Algorithm 3 |
+| Accepted meaning | A task interpretation supported by the applicable authority and evidence policy; generated code must satisfy it |
+| Authority | Permission to establish a requirement or perform an operation within a stated scope |
+| Binding | Association of an abstract operation with a concrete implementation, resource, and contract |
+| Candidate bundle | Compatible versions of prompt, meanings, implementation, tests, bindings, and manifest evaluated together |
+| Canonicalization | Deterministic conversion to a declared representation so equivalent accepted fields have a stable form |
+| Certificate | Record of which checks established which properties for an identified candidate under stated assumptions |
+| Default | A provisional rule whose conclusion can be defeated by incompatible accepted information |
+| Dependency | A link showing that a current justification relies on another fact, rule condition, artifact, or version |
+| Discriminating test | Input on which competing hypotheses predict different observations |
+| Effect | An operation's change to external or persistent state |
+| Epoch | Versioned context fixing the premises used by a particular reasoning or verification claim |
+| Frame condition | Requirement that specified resources or state remain unchanged |
+| Geometric anchor | Retained phrase or reference representation used to prioritize and bound candidate search |
+| Hard requirement | Applicable accepted obligation that the ordinary revision optimizer cannot trade away |
+| Hypothesis | Proposed explanation awaiting evidence; it does not acquire authority through model confidence |
+| Manifest | Record of model, encoder, source, policy, registry, oracle, and environment versions relevant to the claim |
+| Oracle | Rule or procedure determining the expected property of an execution, with explicit authority and scope |
+| Provenance | Record of who or what supplied a claim and which inputs, versions, and assumptions support it |
+| Ratifier | Component that checks whether a proposed commitment matches or is authorized by accepted intent |
+| Regression obligation | A still-valid property that must remain satisfied after a relevant change |
+| Semantic hole | Material task choice not resolved by the available accepted information |
+| Supersession | Authorized replacement of an earlier commitment while preserving its historical record |
+| Typed operation | Operation with explicit input and output types, arguments, preconditions, and postconditions |
+| Unknown result | A check whose required conclusion has not been established; it cannot discharge a mandatory release obligation |
 
-[S1]: https://chatgpt.com/library?file_id=libfile_aa05d55ced88819184992375be4f7ee9&account_id=personal "CONVERGE_Manuscript.pdf, October 20, 2026"
+For any updated instruction, a reviewer can inspect its source construct, accepted supporting evidence, selected semantic change, affected dependencies, rendered text, and verification result. For any accepted release, the verifier must bind those results to the exact candidate and applicable environment. An unresolved choice remains visible with its responsible component and next required evidence-producing action. A prompt that merely sounds more precise has not completed this process until the declared obligations have been checked.
