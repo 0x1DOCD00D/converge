@@ -1,0 +1,13 @@
+{
+  "name": "converge (Scala 3 + sbt + Ollama)",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "dev",
+  "workspaceFolder": "/workspaces/converge",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "extensions": ["scalameta.metals", "scala-lang.scala"]
+    }
+  }
+}
