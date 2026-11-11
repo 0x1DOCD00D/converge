@@ -1,0 +1,42 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: vscode
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces/converge:cached
+      - sbt-cache:/home/vscode/.sbt
+      - coursier-cache:/home/vscode/.cache/coursier
+      - ivy-cache:/home/vscode/.ivy2
+    environment:
+      # CONVERGE reads these (see README "Environment variables").
+      OLLAMA_URL: http://ollama:11434/api
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
+      CONVERGE_EMBEDDING_MODEL: ${CONVERGE_EMBEDDING_MODEL:-qwen3-embedding}
+      CONVERGE_ROUTE_TRIALS: "3"
+      CONVERGE_PLAN_TRIALS: "3"
+      CONVERGE_RUN_ANCHORS: "false"
+      CONVERGE_OUT: out/run-latest
+      # Keep the JVM small; Docker Desktop's VM is memory-limited.
+      SBT_OPTS: -Xmx1g -Xss4m
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+
+volumes:
+  sbt-cache:
+  coursier-cache:
+  ivy-cache:
+  ollama-models:
