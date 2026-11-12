@@ -1,0 +1,484 @@
+{
+  "status": "reconciled",
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "kind": "validInput",
+      "text": "The user can run each step of the workflow from chat with a slash command.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "I'll drive it from chat with slash commands."
+      }
+    },
+    {
+      "id": "REQ-002",
+      "kind": "expectedOutput",
+      "text": "The workflow discovers candidate public GitHub repositories and narrows them to a filtered list of repositories judged worth mining.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "Discover candidate repos on GitHub and filter them down to ones worth mining."
+      }
+    },
+    {
+      "id": "REQ-003",
+      "kind": "persistentEffect",
+      "text": "Given one chosen repository, the workflow produces a local clone of it checked out at a pinned (fixed, specific) commit.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "Pick one repo and clone it at a pinned commit."
+      }
+    },
+    {
+      "id": "REQ-004",
+      "kind": "expectedOutput",
+      "text": "For the cloned repository, each commit is enriched with the pull requests and issues that are linked to it.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "Enrich its commits with the pull requests and issues linked to them."
+      }
+    },
+    {
+      "id": "REQ-005",
+      "kind": "expectedOutput",
+      "text": "The workflow classifies which of the repository's commits are genuine bug fixes, using a subagent to make the classification.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "Classify which commits are genuine bug fixes."
+      }
+    },
+    {
+      "id": "REQ-006",
+      "kind": "expectedOutput",
+      "text": "Each classification decision is shown to the user together with the evidence behind it, not only a yes or no verdict.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "I want to see the evidence for each call, not only a yes or no."
+      }
+    },
+    {
+      "id": "REQ-007",
+      "kind": "persistentEffect",
+      "text": "Everything the workflow finds is stored in a local database that persists between runs.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "Keep everything in a local database, so I can list past runs and see how many"
+      }
+    },
+    {
+      "id": "REQ-008",
+      "kind": "expectedOutput",
+      "text": "The user can list past runs.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "Keep everything in a local database, so I can list past runs and see how many"
+      }
+    },
+    {
+      "id": "REQ-009",
+      "kind": "expectedOutput",
+      "text": "For each past run, the user can see how many bug fixes that run found.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "bug fixes each run found."
+      }
+    },
+    {
+      "id": "REQ-010",
+      "kind": "resourcePermission",
+      "text": "The agents in the workflow cannot run arbitrary shell commands.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "Don't let the agents run arbitrary shell commands."
+      }
+    },
+    {
+      "id": "REQ-011",
+      "kind": "expectedOutput",
+      "text": "Discovery returns only public repositories that are not forks, not archived, and have at least one closed issue or merged pull request.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-001"
+      }
+    },
+    {
+      "id": "REQ-012",
+      "kind": "expectedOutput",
+      "text": "Discovered repositories are shown ordered by star count, up to the number of results the user asked for (default 10).",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-001"
+      }
+    },
+    {
+      "id": "REQ-013",
+      "kind": "validInput",
+      "text": "The user names the single repository to mine and may give the commit to pin.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-002"
+      }
+    },
+    {
+      "id": "REQ-014",
+      "kind": "persistentEffect",
+      "text": "When no commit is given, the commit that is current at that moment is pinned and recorded with the run.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-002"
+      }
+    },
+    {
+      "id": "REQ-015",
+      "kind": "expectedOutput",
+      "text": "Each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-003"
+      }
+    },
+    {
+      "id": "REQ-016",
+      "kind": "expectedOutput",
+      "text": "Each verdict is stored and shown with a written rationale and quoted excerpts for each of those three kinds of evidence.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-003"
+      }
+    },
+    {
+      "id": "REQ-017",
+      "kind": "validInput",
+      "text": "The user can limit the scan by a number of commits or a start date; without one, a default limit applies.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-004"
+      }
+    },
+    {
+      "id": "REQ-018",
+      "kind": "expectedOutput",
+      "text": "Merge commits are not counted among the scanned commits.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-004"
+      }
+    },
+    {
+      "id": "REQ-019",
+      "kind": "persistentEffect",
+      "text": "Each execution of the pipeline on a repository is stored as one run.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-005"
+      }
+    },
+    {
+      "id": "REQ-020",
+      "kind": "expectedOutput",
+      "text": "The list of past runs shows one row per run with its repository and the number of bug fixes it found.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-005"
+      }
+    },
+    {
+      "id": "REQ-021",
+      "kind": "errorHandling",
+      "text": "When some GitHub lookups fail, the command keeps what it collected, reports each failure to the user and records the run as incomplete.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-006"
+      }
+    },
+    {
+      "id": "REQ-022",
+      "kind": "errorHandling",
+      "text": "When GitHub is unreachable or rate-limited, or a repository or commit does not exist, the user is told what failed.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-006"
+      }
+    },
+    {
+      "id": "REQ-023",
+      "kind": "resourcePermission",
+      "text": "A GitHub token may be read from the environment variables GITHUB_TOKEN or GH_TOKEN and is sent only to GitHub.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-007"
+      }
+    },
+    {
+      "id": "REQ-024",
+      "kind": "resourcePermission",
+      "text": "The tool does not start another program to obtain a credential.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-007"
+      }
+    },
+    {
+      "id": "REQ-025",
+      "kind": "errorHandling",
+      "text": "Without a token the tool continues unauthenticated and tells the user that rate limits are lower.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-007"
+      }
+    },
+    {
+      "id": "REQ-026",
+      "kind": "resourcePermission",
+      "text": "The launcher may read a token from the project's .env file as plain data but never executes it.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-008"
+      }
+    },
+    {
+      "id": "REQ-027",
+      "kind": "resourcePermission",
+      "text": "Agents cannot read the .env file.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-008"
+      }
+    },
+    {
+      "id": "REQ-028",
+      "kind": "resourcePermission",
+      "text": "The tool clones only repositories on github.com, given as owner/repo or a github.com URL.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-009"
+      }
+    },
+    {
+      "id": "REQ-029",
+      "kind": "errorHandling",
+      "text": "A repository on any other host, or a local path, is refused with an error and nothing is cloned.",
+      "origin": {
+        "type": "decision",
+        "decision": "DEC-009"
+      }
+    }
+  ],
+  "resolvedAmbiguities": [
+    {
+      "id": "AMB-001",
+      "question": "What makes a discovered repository 'worth mining'?",
+      "decision": "DEC-001"
+    },
+    {
+      "id": "AMB-002",
+      "question": "How is the single repository to mine picked, and how is the pinned commit chosen?",
+      "decision": "DEC-002"
+    },
+    {
+      "id": "AMB-003",
+      "question": "What counts as a 'genuine' bug fix, and what must the evidence for each call contain?",
+      "decision": "DEC-003"
+    },
+    {
+      "id": "AMB-004",
+      "question": "How much history of the repository is enriched and classified?",
+      "decision": "DEC-004"
+    },
+    {
+      "id": "AMB-005",
+      "question": "What is a 'run', and what does the list of past runs show?",
+      "decision": "DEC-005"
+    },
+    {
+      "id": "AMB-006",
+      "question": "What happens on failures such as an unreachable or rate-limited GitHub, a nonexistent repository or commit, or a repository that was already mined?",
+      "decision": "DEC-006"
+    }
+  ],
+  "designNotes": [
+    {
+      "decision": "DEC-003",
+      "text": "The candidate computes the verdict in code from fixed weights; the decision is that the subagent's judgement and rationale decide, so this is recorded as a finding to compare against."
+    }
+  ],
+  "findings": [
+    {
+      "discovery": "DIS-004",
+      "importance": "minor",
+      "what": "With no token found, requests proceed unauthenticated instead of stopping.",
+      "why": "Requests proceed without a token; lower rate limits are a side effect."
+    },
+    {
+      "discovery": "DIS-005",
+      "importance": "minor",
+      "what": "Rate limits are retried at most 3 attempts and only if the wait is 90 seconds or less; the process sleeps for the wait.",
+      "why": "Retry and wait limits are an implementation detail of rate-limit handling."
+    },
+    {
+      "discovery": "DIS-006",
+      "importance": "minor",
+      "what": "HTTP timeouts are hard-coded at 15 s connect and 30 s per request.",
+      "why": "Fixed network timeouts are an implementation detail."
+    },
+    {
+      "discovery": "DIS-009",
+      "importance": "minor",
+      "what": "The launcher starts sbt (compile plus export classpath) when the cached classpath is missing or older than any file in src, build.sbt or project/build.properties, and writes target/causeway.classpath.",
+      "why": "How the launcher compiles the tool is a launch detail."
+    },
+    {
+      "discovery": "DIS-010",
+      "importance": "minor",
+      "what": "The launcher changes into the repo root before running, so the relative default data dir resolves under the repo, not the caller's cwd.",
+      "why": "Which folder the launcher runs from is a launch detail."
+    },
+    {
+      "discovery": "DIS-011",
+      "importance": "minor",
+      "what": "Data location is controlled by CAUSEWAY_DATA (default `data`).",
+      "why": "An environment variable chooses the data folder; a configuration detail."
+    },
+    {
+      "discovery": "DIS-012",
+      "importance": "minor",
+      "what": "The database path can be overridden with CAUSEWAY_DB; default is data/causeway.db.",
+      "why": "An environment variable chooses the database file; a configuration detail."
+    },
+    {
+      "discovery": "DIS-013",
+      "importance": "minor",
+      "what": "The SQLite file (and parent directories) is created and the schema applied for every command except help and guard-bash, including an unknown command that then fails.",
+      "why": "The database is created even for commands that then fail; a side effect."
+    },
+    {
+      "discovery": "DIS-014",
+      "importance": "minor",
+      "what": "Usage text and errors go to stdout/stderr; a command with no recognised name prints help and exits 0.",
+      "why": "Help output and its exit code are not mentioned in the prompts."
+    },
+    {
+      "discovery": "DIS-015",
+      "importance": "minor",
+      "what": "Only UsageError and GitHubError are turned into an error message and exit 1; git, IO and SQL failures propagate as uncaught exceptions.",
+      "why": "Git, IO and SQL failures end as uncaught exceptions rather than clear messages."
+    },
+    {
+      "discovery": "DIS-016",
+      "importance": "notable",
+      "what": "Clones are stored at data/repos/<owner>_<repo>, shared by every run of the same repository; the folder is reused without checking its origin against --url.",
+      "why": "A clone folder is reused for a different --url without checking its origin, so results can silently come from another repository."
+    },
+    {
+      "discovery": "DIS-018",
+      "importance": "minor",
+      "what": "An existing clone is fetched from origin, pruning deleted refs.",
+      "why": "Fetching an existing clone is a detail of cloning."
+    },
+    {
+      "discovery": "DIS-019",
+      "importance": "minor",
+      "what": "The clone's working tree is force-checked-out at the pinned commit, discarding local changes in the clone.",
+      "why": "The pinned checkout discards local changes in the clone; a detail of how checkout is done."
+    },
+    {
+      "discovery": "DIS-020",
+      "importance": "minor",
+      "what": "For an existing clone with no branch/commit given, a network ls-remote asks the remote for its HEAD.",
+      "why": "Asking the remote for its HEAD is a detail of choosing the commit to pin."
+    },
+    {
+      "discovery": "DIS-022",
+      "importance": "notable",
+      "what": "Stored diffs are cut at 20000 bytes per commit; the classifier is shown only 6000 characters of it.",
+      "why": "Stored diffs are cut at 20000 bytes and the classifier sees only 6000 characters, so evidence can be based on partial changes."
+    },
+    {
+      "discovery": "DIS-026",
+      "importance": "minor",
+      "what": "Each candidate costs two extra GitHub search API calls (closed issues, merged PRs).",
+      "why": "Extra search calls per candidate are an implementation cost."
+    },
+    {
+      "discovery": "DIS-028",
+      "importance": "notable",
+      "what": "Searching overwrites any earlier stored row for the same repository, including a previous rejection reason.",
+      "why": "Searching again overwrites an earlier stored row for the same repository, including a previous rejection reason, so stored history is lost."
+    },
+    {
+      "discovery": "DIS-029",
+      "importance": "minor",
+      "what": "In enrichment, a 404 on an issue/PR lookup is treated as no link rather than an error.",
+      "why": "A 404 on an issue or PR lookup is treated as no link; an error-handling detail."
+    },
+    {
+      "discovery": "DIS-031",
+      "importance": "notable",
+      "what": "Only the first page of PRs for a commit is read, and one extra API call is made per distinct referenced number.",
+      "why": "Only the first page of PRs for a commit is read, so linked pull requests can be missed without notice."
+    },
+    {
+      "discovery": "DIS-032",
+      "importance": "minor",
+      "what": "Re-running enrich deletes and rewrites the stored links of each commit; PR/issue bodies are cut to 4000 characters.",
+      "why": "Re-running enrichment rewrites stored links and cuts text at 4000 characters; a storage detail."
+    },
+    {
+      "discovery": "DIS-033",
+      "importance": "notable",
+      "what": "next-batch silently caps --size at 5.",
+      "why": "next-batch silently caps --size at 5, so the user gets fewer commits than requested without being told."
+    },
+    {
+      "discovery": "DIS-035",
+      "importance": "minor",
+      "what": "The reply parser accepts a code fence and an object with a results array, though the agent file forbids fences.",
+      "why": "The parser tolerates a code fence although the agent file forbids it; a parsing detail."
+    },
+    {
+      "discovery": "DIS-036",
+      "importance": "minor",
+      "what": "A 'linked' signal supplied for a commit with no links is silently discarded.",
+      "why": "A linked signal for a commit with no links is dropped; a parsing detail."
+    },
+    {
+      "discovery": "DIS-037",
+      "importance": "minor",
+      "what": "Valid entries in a reply are stored even when other entries are rejected; rejected ones are only reported.",
+      "why": "Valid entries in a reply are stored while others are rejected and only reported; a parsing detail."
+    },
+    {
+      "discovery": "DIS-038",
+      "importance": "notable",
+      "what": "Saving a classification replaces any existing verdict for that commit, and record-classification accepts shas that are already classified.",
+      "why": "Saving a classification replaces any earlier verdict for the commit, so earlier verdicts and their evidence are lost."
+    },
+    {
+      "discovery": "DIS-040",
+      "importance": "minor",
+      "what": "The schema is applied by splitting the SQL file on semicolons with comment lines removed, on every open, and foreign keys are enabled per connection.",
+      "why": "How the schema is applied is an implementation detail."
+    }
+  ],
+  "explainedDiscoveries": [
+    {
+      "discovery": "DIS-001",
+      "coveredBy": "REQ-002",
+      "reason": "Looking up repositories on GitHub is what the discovery step is asked to do."
+    },
+    {
+      "discovery": "DIS-039",
+      "coveredBy": "REQ-010",
+      "reason": "The guard hook is the mechanism that keeps agents from running arbitrary shell commands, which the prompt asks for."
+    }
+  ]
+}

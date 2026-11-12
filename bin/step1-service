@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Starts the CONVERGE Step 1 HTTP service (see src/main/scala/converge/step1/Server.scala).
+# Compiles with sbt, then runs the service in its own small JVM: on a 4 GB Docker VM the model needs the memory.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+classpath="$(sbt -batch -error "export Runtime/fullClasspath" | tail -n 1)"
+exec java -Xmx384m -cp "$classpath" converge.step1.Step1Main serve "$@"

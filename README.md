@@ -353,6 +353,35 @@ The concrete oracle performs these checks after the normal model experiment.
 
 The concrete oracle does not generate the target application and does not assume that the target application uses the CONVERGE repository layout.
 
+## CONVERGE Step 1 service (GRAIL-DX)
+
+`src/main/scala/converge/step1/` implements CONVERGE Step 1: it takes the reconciled behavioral contract produced by
+GRAIL-DX Section 1 and turns it into the records the rest of CONVERGE works from (contract snapshot, source map, proposed
+and ratified meanings, construct table, specIR, evidence policy and ledger, epoch manifest, controller state).
+A local model (Ollama, `qwen3:4b` by default) is the elaborator; a deterministic ratifier accepts only what the
+contract, or a verified quote of the user's words, supports. The full description, with a worked example, is in the
+GRAIL-DX repository: `docs/section-2/converge-step-1.md`.
+
+Run it inside the devcontainer (`docker compose -p devcontainer -f .devcontainer/docker-compose.yml up -d`):
+
+```
+bin/step1-service                     # HTTP service on port 8090 (published on 127.0.0.1:8090 and as http://converge:8090
+                                      # on the docker network `converge`, which the GRAIL-DX devcontainer joins)
+sbt "runMain converge.step1.Step1Main run --section1 <GRAIL-DX out folder>"        # one run without the service
+sbt "runMain converge.step1.Step1Main elaborate --section1 <folder> --requirement REQ-017"   # 1.3-1.4 for one requirement
+sbt "testOnly converge.step1.*"       # tests (a scripted elaborator stands in for the model)
+```
+
+| Method and path | Purpose |
+|---|---|
+| `GET /health` | service status, model and output folder |
+| `POST /step1/runs` | body `{"files": {"reconciledContract.json": "<text>", "promptRecord.json": "<text>", "decisions.json": "<text>", "agentInstructions/<path>": "<text>"}}`; substeps 1.1-1.2 run at once (HTTP 422 with the problems if the files are refused), the rest in the background (HTTP 202 with the `runId`) |
+| `GET /step1/runs/{runId}` | `queued`, `running` (with progress over the requirements), `done` (with a summary) or `failed` |
+| `GET /step1/runs/{runId}/records/{name}` | one record, e.g. `specIR`; records are also written to `out/step1/<runId>/` |
+
+Step 1 settings: `OLLAMA_MODEL` (qwen3:4b), `CONVERGE_STEP1_TEMPERATURE` (0.0), `CONVERGE_STEP1_SEED` (17),
+`CONVERGE_STEP1_NUM_CTX` (4096), `CONVERGE_STEP1_ATTEMPTS` (3), `CONVERGE_STEP1_OUT` (out/step1), `CONVERGE_STEP1_PORT` (8090).
+
 ## Environment variables
 
 | Variable | Default | Purpose |

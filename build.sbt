@@ -6,7 +6,8 @@ lazy val root = (project in file("."))
   .settings(
     name := "converge",
     libraryDependencies ++= Seq(
-      "com.lihaoyi" %% "ujson" % "4.4.3"
+      "com.lihaoyi" %% "ujson" % "4.4.3",
+      "org.scalameta" %% "munit" % "1.1.1" % Test
     ),
     scalacOptions ++= Seq(
       "-deprecation",

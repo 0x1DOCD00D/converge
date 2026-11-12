@@ -1,0 +1,189 @@
+{
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "resolves": [
+        "AMB-001",
+        "DIS-024",
+        "DIS-025",
+        "DIS-027"
+      ],
+      "question": "What makes a discovered repository worth mining?",
+      "answer": "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+      "requirements": [
+        {
+          "kind": "expectedOutput",
+          "text": "Discovery returns only public repositories that are not forks, not archived, and have at least one closed issue or merged pull request."
+        },
+        {
+          "kind": "expectedOutput",
+          "text": "Discovered repositories are shown ordered by star count, up to the number of results the user asked for (default 10)."
+        }
+      ],
+      "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+    },
+    {
+      "id": "DEC-002",
+      "resolves": [
+        "AMB-002"
+      ],
+      "question": "How is the repository to mine picked, and how is the pinned commit chosen?",
+      "answer": "The user names the repository (from the discovered list or directly) and may give a commit; otherwise the tool pins the commit current at that moment and records it.",
+      "requirements": [
+        {
+          "kind": "validInput",
+          "text": "The user names the single repository to mine and may give the commit to pin."
+        },
+        {
+          "kind": "persistentEffect",
+          "text": "When no commit is given, the commit that is current at that moment is pinned and recorded with the run."
+        }
+      ],
+      "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+    },
+    {
+      "id": "DEC-003",
+      "resolves": [
+        "AMB-003",
+        "DIS-034"
+      ],
+      "question": "What counts as a genuine bug fix: a fixed weighted formula in code, or the subagent's judgement?",
+      "answer": "The subagent judges from message, change and linked text, and shows a written rationale with quoted excerpts",
+      "requirements": [
+        {
+          "kind": "expectedOutput",
+          "text": "Each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue."
+        },
+        {
+          "kind": "expectedOutput",
+          "text": "Each verdict is stored and shown with a written rationale and quoted excerpts for each of those three kinds of evidence."
+        }
+      ],
+      "designNote": "The candidate computes the verdict in code from fixed weights; the decision is that the subagent's judgement and rationale decide, so this is recorded as a finding to compare against.",
+      "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+    },
+    {
+      "id": "DEC-004",
+      "resolves": [
+        "AMB-004",
+        "DIS-021",
+        "DIS-023"
+      ],
+      "question": "How much history is scanned, and are merge commits scanned?",
+      "answer": "A user-specified limit or start date with a default limit; merge commits left out",
+      "requirements": [
+        {
+          "kind": "validInput",
+          "text": "The user can limit the scan by a number of commits or a start date; without one, a default limit applies."
+        },
+        {
+          "kind": "expectedOutput",
+          "text": "Merge commits are not counted among the scanned commits."
+        }
+      ],
+      "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+    },
+    {
+      "id": "DEC-005",
+      "resolves": [
+        "AMB-005"
+      ],
+      "question": "What is a run, and what does the list of past runs show?",
+      "answer": "A run is one execution of the whole pipeline on one repository; the list shows one row per run with its bug-fix count.",
+      "requirements": [
+        {
+          "kind": "persistentEffect",
+          "text": "Each execution of the pipeline on a repository is stored as one run."
+        },
+        {
+          "kind": "expectedOutput",
+          "text": "The list of past runs shows one row per run with its repository and the number of bug fixes it found."
+        }
+      ],
+      "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+    },
+    {
+      "id": "DEC-006",
+      "resolves": [
+        "AMB-006",
+        "DIS-030"
+      ],
+      "question": "When some GitHub lookups fail during enrichment, what happens?",
+      "answer": "The command keeps what it collected, reports each failure and records the run as incomplete",
+      "requirements": [
+        {
+          "kind": "errorHandling",
+          "text": "When some GitHub lookups fail, the command keeps what it collected, reports each failure to the user and records the run as incomplete."
+        },
+        {
+          "kind": "errorHandling",
+          "text": "When GitHub is unreachable or rate-limited, or a repository or commit does not exist, the user is told what failed."
+        }
+      ],
+      "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+    },
+    {
+      "id": "DEC-007",
+      "resolves": [
+        "DIS-002",
+        "DIS-003"
+      ],
+      "question": "May the tool obtain and use a GitHub credential, and where from?",
+      "answer": "Limited: token only from the GITHUB_TOKEN or GH_TOKEN environment variables, sent only to GitHub, and no other program is started to get it",
+      "requirements": [
+        {
+          "kind": "resourcePermission",
+          "text": "A GitHub token may be read from the environment variables GITHUB_TOKEN or GH_TOKEN and is sent only to GitHub."
+        },
+        {
+          "kind": "resourcePermission",
+          "text": "The tool does not start another program to obtain a credential."
+        },
+        {
+          "kind": "errorHandling",
+          "text": "Without a token the tool continues unauthenticated and tells the user that rate limits are lower."
+        }
+      ],
+      "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+    },
+    {
+      "id": "DEC-008",
+      "resolves": [
+        "DIS-007",
+        "DIS-008"
+      ],
+      "question": "May the launcher read the project's .env file, and may that file be executed?",
+      "answer": "Limited: .env is read as plain data for the token only, never executed",
+      "requirements": [
+        {
+          "kind": "resourcePermission",
+          "text": "The launcher may read a token from the project's .env file as plain data but never executes it."
+        },
+        {
+          "kind": "resourcePermission",
+          "text": "Agents cannot read the .env file."
+        }
+      ],
+      "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+    },
+    {
+      "id": "DEC-009",
+      "resolves": [
+        "DIS-017"
+      ],
+      "question": "Which repositories and hosts may the tool clone from?",
+      "answer": "Limited: only repositories on github.com, given as owner/repo or a github.com URL",
+      "requirements": [
+        {
+          "kind": "resourcePermission",
+          "text": "The tool clones only repositories on github.com, given as owner/repo or a github.com URL."
+        },
+        {
+          "kind": "errorHandling",
+          "text": "A repository on any other host, or a local path, is refused with an error and nothing is cloned."
+        }
+      ],
+      "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+    }
+  ]
+}

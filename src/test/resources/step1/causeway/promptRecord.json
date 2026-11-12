@@ -1,0 +1,26 @@
+{
+  "prompts": [
+    {
+      "id": "P-0001",
+      "sessionId": "f51e6cf8-bc03-46f5-b5d5-3fec441a325b",
+      "timestamp": "2026-10-28T03:39:50.191Z",
+      "kind": "instruction",
+      "text": "(create a new empty branch for this)\n\n<pasted_content id=\"c90b\">\nBuild me a Claude Code workflow called \"Causeway Mini\" that mines public GitHub\nrepositories for bug-fix commits and stores what it finds.\n\nI'll drive it from chat with slash commands. Each command is a thin wrapper\naround a command-line tool, and the tool does the real work. The pipeline is:\n\n1. Discover candidate repos on GitHub and filter them down to ones worth mining.\n2. Pick one repo and clone it at a pinned commit.\n3. Enrich its commits with the pull requests and issues linked to them.\n4. Classify which commits are genuine bug fixes. Use a subagent for this,\n   and I want to see the evidence for each call, not only a yes or no.\n\nKeep everything in a local database, so I can list past runs and see how many\nbug fixes each run found. Don't let the agents run arbitrary shell commands.\n\nWrite the CLI in Scala 3 with sbt. Document the decisions you make as you go,\nand include tests. I'm on a Mac, but it should also work on Linux and Windows.\n</pasted_content id=\"c90b\">\n"
+    },
+    {
+      "id": "P-0002",
+      "sessionId": "f51e6cf8-bc03-46f5-b5d5-3fec441a325b",
+      "timestamp": "2026-10-28T03:44:29.206Z",
+      "kind": "questionAnswer",
+      "text": "Question: The new empty branch `causeway-mini-rebuild` is ready, but this Mac has no JDK, sbt, Homebrew or Coursier, so I can't compile or run the Scala tests yet. How should I handle that?\nOptions:\n- Install into ~/.local (Recommended): I download a Temurin JDK 21 and the sbt launcher into ~/.local without admin rights and don't touch system paths. Everything I write gets compiled and tested.\n- You install it: You install a JDK 17+ and sbt yourself, for example from sdkman.io or the Temurin installer. I wait, then build and test.\n- Write code untested: I write the whole project without compiling it, and mark it as unverified. Faster, but the tests won't have been run.\nAnswer: Install into ~/.local (Recommended)",
+      "answer": "Install into ~/.local (Recommended)"
+    },
+    {
+      "id": "P-0003",
+      "sessionId": "f51e6cf8-bc03-46f5-b5d5-3fec441a325b",
+      "timestamp": "2026-10-28T04:53:10.431Z",
+      "kind": "instruction",
+      "text": "commit push bro"
+    }
+  ]
+}

@@ -21,6 +21,16 @@ services:
       CONVERGE_OUT: out/run-latest
       # Keep the JVM small; Docker Desktop's VM is memory-limited.
       SBT_OPTS: -Xmx1g -Xss4m
+      # CONVERGE Step 1 service (bin/step1-service); records go under out/step1/<runId>/.
+      CONVERGE_STEP1_PORT: "8090"
+      CONVERGE_STEP1_OUT: out/step1
+    ports:
+      - "127.0.0.1:8090:8090"
+    networks:
+      default: {}
+      converge:
+        # GRAIL-DX's devcontainer joins this network and calls http://converge:8090.
+        aliases: [converge]
     depends_on:
       - ollama
 
@@ -34,6 +44,10 @@ services:
       OLLAMA_KEEP_ALIVE: 30m
       OLLAMA_NUM_PARALLEL: "1"
       OLLAMA_MAX_LOADED_MODELS: "1"
+
+networks:
+  converge:
+    name: converge
 
 volumes:
   sbt-cache:
