@@ -24,7 +24,7 @@
     {
       "id": "REQ-002",
       "kind": "expectedOutput",
-      "text": "The workflow discovers candidate public GitHub repositories and narrows them to a filtered list of repositories judged worth mining.",
+      "text": "The workflow discovers candidate public GitHub repositories and narrows them to a filtered list of repositories judged worth mining; discovery returns only public repositories that are not forks, not archived, and have at least one closed issue or merged pull request.",
       "origin": {
         "type": "prompt",
         "promptId": "P-0001",
@@ -38,13 +38,91 @@
             "promptId": "P-0001",
             "quote": "Discover candidate repos on GitHub and filter them down to ones worth mining."
           }
+        },
+        {
+          "step": "merged",
+          "from": [
+            {
+              "id": "REQ-011",
+              "kind": "expectedOutput",
+              "text": "Discovery returns only public repositories that are not forks, not archived, and have at least one closed issue or merged pull request.",
+              "origin": {
+                "type": "decision",
+                "decision": "DEC-001"
+              },
+              "derivation": [
+                {
+                  "step": "ambiguous",
+                  "items": [
+                    {
+                      "ambiguity": "AMB-001",
+                      "question": "What makes a discovered repository 'worth mining'?",
+                      "readings": [
+                        "A fixed set of criteria built into the tool (for example activity, size or number of bug-fix commits).",
+                        "Criteria the user supplies as options on each run.",
+                        "A ranking in which the user decides which repositories are worth mining."
+                      ]
+                    },
+                    {
+                      "discovery": "DIS-024",
+                      "what": "Search fetches a single page of at most 100 repositories sorted by stars, sized from max-results (default 10).",
+                      "question": "What makes a discovered repository worth mining?",
+                      "readings": [
+                        "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+                        "Criteria the user supplies on each run",
+                        "The user decides from an unfiltered ranking"
+                      ],
+                      "reason": "One page of at most 100 repositories ordered by stars decides what discovery can return."
+                    },
+                    {
+                      "discovery": "DIS-025",
+                      "what": "Every search query is forced to exclude forks and archived repos and to be public, regardless of the user's request.",
+                      "question": "What makes a discovered repository worth mining?",
+                      "readings": [
+                        "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+                        "Criteria the user supplies on each run",
+                        "The user decides from an unfiltered ranking"
+                      ],
+                      "reason": "Forks and archived repositories are always excluded, whatever the user asks."
+                    },
+                    {
+                      "discovery": "DIS-027",
+                      "what": "A repo qualifies only if it has at least one closed issue or merged PR.",
+                      "question": "What makes a discovered repository worth mining?",
+                      "readings": [
+                        "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+                        "Criteria the user supplies on each run",
+                        "The user decides from an unfiltered ranking"
+                      ],
+                      "reason": "Qualifying only with a closed issue or merged PR is a filter the prompts do not state."
+                    }
+                  ]
+                },
+                {
+                  "step": "decided",
+                  "decision": "DEC-001",
+                  "question": "What makes a discovered repository worth mining?",
+                  "answer": "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+                  "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+                },
+                {
+                  "step": "created",
+                  "text": "Discovery returns only public repositories that are not forks, not archived, and have at least one closed issue or merged pull request."
+                }
+              ]
+            }
+          ],
+          "previousText": "The workflow discovers candidate public GitHub repositories and narrows them to a filtered list of repositories judged worth mining.",
+          "text": "The workflow discovers candidate public GitHub repositories and narrows them to a filtered list of repositories judged worth mining; discovery returns only public repositories that are not forks, not archived, and have at least one closed issue or merged pull request.",
+          "reason": "REQ-011 answers what makes a repository 'worth mining', which REQ-002 leaves open.",
+          "proposedBy": "requirement-merger"
         }
       ]
     },
     {
       "id": "REQ-003",
       "kind": "persistentEffect",
-      "text": "The user names the single repository to mine and may give the commit to pin; given that repository, the workflow produces a local clone of it checked out at a pinned (fixed, specific) commit, and when no commit is given, the commit that is current at that moment is pinned and recorded with the run.",
+      "text": "The user names the single repository to mine and may give the commit to pin. Given the chosen repository, the workflow produces a local clone of it checked out at a pinned (fixed, specific) commit; when no commit is given, the commit that is current at that moment is pinned and recorded with the run.",
       "origin": {
         "type": "prompt",
         "promptId": "P-0001",
@@ -136,7 +214,7 @@
             }
           ],
           "previousText": "Given one chosen repository, the workflow produces a local clone of it checked out at a pinned (fixed, specific) commit.",
-          "text": "The user names the single repository to mine and may give the commit to pin; given that repository, the workflow produces a local clone of it checked out at a pinned (fixed, specific) commit, and when no commit is given, the commit that is current at that moment is pinned and recorded with the run.",
+          "text": "The user names the single repository to mine and may give the commit to pin. Given the chosen repository, the workflow produces a local clone of it checked out at a pinned (fixed, specific) commit; when no commit is given, the commit that is current at that moment is pinned and recorded with the run.",
           "reason": "REQ-013 and REQ-014 answer how the repository and the pinned commit of REQ-003 are chosen.",
           "proposedBy": "requirement-merger"
         }
@@ -146,9 +224,9 @@
       ],
       "refersTo": [
         {
-          "phrase": "the run",
-          "requirement": "REQ-007",
-          "reason": "The run is the execution stored as one run by REQ-007."
+          "phrase": "recorded with the run",
+          "requirement": "REQ-008",
+          "reason": "The run is the stored execution of the pipeline defined in REQ-008."
         }
       ]
     },
@@ -182,7 +260,7 @@
     {
       "id": "REQ-005",
       "kind": "expectedOutput",
-      "text": "The workflow classifies which of the repository's commits are genuine bug fixes, using a subagent to make the classification, and each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue.",
+      "text": "The workflow classifies which of the repository's commits are genuine bug fixes, using a subagent to make the classification; each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue.",
       "origin": {
         "type": "prompt",
         "promptId": "P-0001",
@@ -249,8 +327,8 @@
             }
           ],
           "previousText": "The workflow classifies which of the repository's commits are genuine bug fixes, using a subagent to make the classification.",
-          "text": "The workflow classifies which of the repository's commits are genuine bug fixes, using a subagent to make the classification, and each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue.",
-          "reason": "REQ-015 answers on what basis the subagent of REQ-005 judges whether a commit is a genuine bug fix.",
+          "text": "The workflow classifies which of the repository's commits are genuine bug fixes, using a subagent to make the classification; each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue.",
+          "reason": "REQ-015 answers what 'genuine bug fix' is judged on, which REQ-005 leaves open.",
           "proposedBy": "requirement-merger"
         }
       ],
@@ -258,19 +336,14 @@
         {
           "phrase": "the repository's commits",
           "requirement": "REQ-003",
-          "reason": "The repository is the one chosen and cloned under REQ-003."
-        },
-        {
-          "phrase": "linked pull request or issue",
-          "requirement": "REQ-004",
-          "reason": "The linked pull requests and issues are the ones REQ-004 enriches each commit with."
+          "reason": "The repository is the one cloned in REQ-003."
         }
       ]
     },
     {
       "id": "REQ-006",
       "kind": "expectedOutput",
-      "text": "Each classification decision is shown to the user together with the evidence behind it, not only a yes or no verdict.",
+      "text": "Each classification decision is shown to the user together with the evidence behind it, not only a yes or no verdict; each verdict is stored and shown with a written rationale and quoted excerpts for each of those three kinds of evidence.",
       "origin": {
         "type": "prompt",
         "promptId": "P-0001",
@@ -284,20 +357,108 @@
             "promptId": "P-0001",
             "quote": "I want to see the evidence for each call, not only a yes or no."
           }
+        },
+        {
+          "step": "merged",
+          "from": [
+            {
+              "id": "REQ-016",
+              "kind": "expectedOutput",
+              "text": "Each verdict is stored and shown with a written rationale and quoted excerpts for each of those three kinds of evidence.",
+              "origin": {
+                "type": "decision",
+                "decision": "DEC-003"
+              },
+              "derivation": [
+                {
+                  "step": "ambiguous",
+                  "items": [
+                    {
+                      "ambiguity": "AMB-003",
+                      "question": "What counts as a 'genuine' bug fix, and what must the evidence for each call contain?",
+                      "readings": [
+                        "A commit that references a linked issue labelled as a bug, with the evidence being that issue and the commit message.",
+                        "A commit judged by the subagent from its message and code change, with the evidence being a written rationale plus quoted excerpts.",
+                        "Any combination of signals, with evidence listing every signal considered, including those against the call."
+                      ]
+                    },
+                    {
+                      "discovery": "DIS-034",
+                      "what": "The bug-fix verdict is computed in code from fixed weights and a 0.6 threshold that the agent files do not state.",
+                      "question": "What counts as a genuine bug fix: a fixed weighted formula in code, or the subagent's judgement?",
+                      "readings": [
+                        "A formula in code over fixed signals with a threshold",
+                        "The subagent judges from message, change and linked text, and shows a written rationale with quoted excerpts",
+                        "Any combination of signals, listing every signal including those against"
+                      ],
+                      "reason": "The verdict is computed in code from fixed weights and a threshold the agent files do not state."
+                    }
+                  ]
+                },
+                {
+                  "step": "decided",
+                  "decision": "DEC-003",
+                  "question": "What counts as a genuine bug fix: a fixed weighted formula in code, or the subagent's judgement?",
+                  "answer": "The subagent judges from message, change and linked text, and shows a written rationale with quoted excerpts",
+                  "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+                },
+                {
+                  "step": "created",
+                  "text": "Each verdict is stored and shown with a written rationale and quoted excerpts for each of those three kinds of evidence."
+                }
+              ]
+            }
+          ],
+          "previousText": "Each classification decision is shown to the user together with the evidence behind it, not only a yes or no verdict.",
+          "text": "Each classification decision is shown to the user together with the evidence behind it, not only a yes or no verdict; each verdict is stored and shown with a written rationale and quoted excerpts for each of those three kinds of evidence.",
+          "reason": "REQ-016 answers what the evidence for each call contains, which REQ-006 leaves open.",
+          "proposedBy": "requirement-merger"
         }
       ],
       "refersTo": [
         {
           "phrase": "Each classification decision",
           "requirement": "REQ-005",
-          "reason": "The classification decisions are the verdicts REQ-005 produces."
+          "reason": "Classification decisions are the bug-fix classifications made in REQ-005."
+        },
+        {
+          "phrase": "those three kinds of evidence",
+          "requirement": "REQ-005",
+          "reason": "The three kinds of evidence (commit message, code change, linked pull request or issue text) are defined in REQ-005's judgement."
         }
       ]
     },
     {
       "id": "REQ-007",
       "kind": "persistentEffect",
-      "text": "Everything the workflow finds is stored in a local database that persists between runs, and each execution of the pipeline on a repository is stored as one run.",
+      "text": "Everything the workflow finds is stored in a local database that persists between runs.",
+      "origin": {
+        "type": "prompt",
+        "promptId": "P-0001",
+        "quote": "Keep everything in a local database, so I can list past runs and see how many"
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "Keep everything in a local database, so I can list past runs and see how many"
+          }
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "between runs",
+          "requirement": "REQ-008",
+          "reason": "Runs are the executions defined in REQ-008."
+        }
+      ]
+    },
+    {
+      "id": "REQ-008",
+      "kind": "expectedOutput",
+      "text": "The user can list past runs. Each execution of the pipeline on a repository is stored as one run, and the list of past runs shows one row per run with its repository and the number of bug fixes it found.",
       "origin": {
         "type": "prompt",
         "promptId": "P-0001",
@@ -350,36 +511,7 @@
                   "text": "Each execution of the pipeline on a repository is stored as one run."
                 }
               ]
-            }
-          ],
-          "previousText": "Everything the workflow finds is stored in a local database that persists between runs.",
-          "text": "Everything the workflow finds is stored in a local database that persists between runs, and each execution of the pipeline on a repository is stored as one run.",
-          "reason": "REQ-019 answers what a run is, which REQ-007 leaves open when it refers to runs.",
-          "proposedBy": "requirement-merger"
-        }
-      ]
-    },
-    {
-      "id": "REQ-008",
-      "kind": "expectedOutput",
-      "text": "The user can list past runs; the list shows one row per run with its repository and the number of bug fixes it found.",
-      "origin": {
-        "type": "prompt",
-        "promptId": "P-0001",
-        "quote": "Keep everything in a local database, so I can list past runs and see how many"
-      },
-      "derivation": [
-        {
-          "step": "stated",
-          "source": {
-            "type": "prompt",
-            "promptId": "P-0001",
-            "quote": "Keep everything in a local database, so I can list past runs and see how many"
-          }
-        },
-        {
-          "step": "merged",
-          "from": [
+            },
             {
               "id": "REQ-020",
               "kind": "expectedOutput",
@@ -418,17 +550,13 @@
             }
           ],
           "previousText": "The user can list past runs.",
-          "text": "The user can list past runs; the list shows one row per run with its repository and the number of bug fixes it found.",
-          "reason": "REQ-020 answers what the list of past runs of REQ-008 shows.",
+          "text": "The user can list past runs. Each execution of the pipeline on a repository is stored as one run, and the list of past runs shows one row per run with its repository and the number of bug fixes it found.",
+          "reason": "REQ-019 and REQ-020 answer what a run is and what the list of past runs shows, which REQ-008 leaves open.",
           "proposedBy": "requirement-merger"
         }
       ],
-      "refersTo": [
-        {
-          "phrase": "past runs",
-          "requirement": "REQ-007",
-          "reason": "Past runs are the runs stored by REQ-007."
-        }
+      "mergedKinds": [
+        "persistentEffect"
       ]
     },
     {
@@ -453,8 +581,8 @@
       "refersTo": [
         {
           "phrase": "For each past run",
-          "requirement": "REQ-007",
-          "reason": "Past runs are the runs stored by REQ-007."
+          "requirement": "REQ-008",
+          "reason": "Past runs are the runs listed in REQ-008."
         }
       ]
     },
@@ -476,81 +604,12 @@
             "quote": "Don't let the agents run arbitrary shell commands."
           }
         }
-      ]
-    },
-    {
-      "id": "REQ-011",
-      "kind": "expectedOutput",
-      "text": "Discovery returns only public repositories that are not forks, not archived, and have at least one closed issue or merged pull request.",
-      "origin": {
-        "type": "decision",
-        "decision": "DEC-001"
-      },
-      "derivation": [
-        {
-          "step": "ambiguous",
-          "items": [
-            {
-              "ambiguity": "AMB-001",
-              "question": "What makes a discovered repository 'worth mining'?",
-              "readings": [
-                "A fixed set of criteria built into the tool (for example activity, size or number of bug-fix commits).",
-                "Criteria the user supplies as options on each run.",
-                "A ranking in which the user decides which repositories are worth mining."
-              ]
-            },
-            {
-              "discovery": "DIS-024",
-              "what": "Search fetches a single page of at most 100 repositories sorted by stars, sized from max-results (default 10).",
-              "question": "What makes a discovered repository worth mining?",
-              "readings": [
-                "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
-                "Criteria the user supplies on each run",
-                "The user decides from an unfiltered ranking"
-              ],
-              "reason": "One page of at most 100 repositories ordered by stars decides what discovery can return."
-            },
-            {
-              "discovery": "DIS-025",
-              "what": "Every search query is forced to exclude forks and archived repos and to be public, regardless of the user's request.",
-              "question": "What makes a discovered repository worth mining?",
-              "readings": [
-                "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
-                "Criteria the user supplies on each run",
-                "The user decides from an unfiltered ranking"
-              ],
-              "reason": "Forks and archived repositories are always excluded, whatever the user asks."
-            },
-            {
-              "discovery": "DIS-027",
-              "what": "A repo qualifies only if it has at least one closed issue or merged PR.",
-              "question": "What makes a discovered repository worth mining?",
-              "readings": [
-                "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
-                "Criteria the user supplies on each run",
-                "The user decides from an unfiltered ranking"
-              ],
-              "reason": "Qualifying only with a closed issue or merged PR is a filter the prompts do not state."
-            }
-          ]
-        },
-        {
-          "step": "decided",
-          "decision": "DEC-001",
-          "question": "What makes a discovered repository worth mining?",
-          "answer": "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
-          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
-        },
-        {
-          "step": "created",
-          "text": "Discovery returns only public repositories that are not forks, not archived, and have at least one closed issue or merged pull request."
-        }
       ],
       "refersTo": [
         {
-          "phrase": "Discovery",
-          "requirement": "REQ-002",
-          "reason": "Discovery is the step of REQ-002 that finds and filters repositories."
+          "phrase": "The agents in the workflow",
+          "requirement": "REQ-005",
+          "reason": "The subagent used in REQ-005 is an agent in the workflow."
         }
       ]
     },
@@ -626,66 +685,7 @@
         {
           "phrase": "Discovered repositories",
           "requirement": "REQ-002",
-          "reason": "The discovered repositories are the filtered list REQ-002 produces."
-        }
-      ]
-    },
-    {
-      "id": "REQ-016",
-      "kind": "expectedOutput",
-      "text": "Each verdict is stored and shown with a written rationale and quoted excerpts for each of those three kinds of evidence.",
-      "origin": {
-        "type": "decision",
-        "decision": "DEC-003"
-      },
-      "derivation": [
-        {
-          "step": "ambiguous",
-          "items": [
-            {
-              "ambiguity": "AMB-003",
-              "question": "What counts as a 'genuine' bug fix, and what must the evidence for each call contain?",
-              "readings": [
-                "A commit that references a linked issue labelled as a bug, with the evidence being that issue and the commit message.",
-                "A commit judged by the subagent from its message and code change, with the evidence being a written rationale plus quoted excerpts.",
-                "Any combination of signals, with evidence listing every signal considered, including those against the call."
-              ]
-            },
-            {
-              "discovery": "DIS-034",
-              "what": "The bug-fix verdict is computed in code from fixed weights and a 0.6 threshold that the agent files do not state.",
-              "question": "What counts as a genuine bug fix: a fixed weighted formula in code, or the subagent's judgement?",
-              "readings": [
-                "A formula in code over fixed signals with a threshold",
-                "The subagent judges from message, change and linked text, and shows a written rationale with quoted excerpts",
-                "Any combination of signals, listing every signal including those against"
-              ],
-              "reason": "The verdict is computed in code from fixed weights and a threshold the agent files do not state."
-            }
-          ]
-        },
-        {
-          "step": "decided",
-          "decision": "DEC-003",
-          "question": "What counts as a genuine bug fix: a fixed weighted formula in code, or the subagent's judgement?",
-          "answer": "The subagent judges from message, change and linked text, and shows a written rationale with quoted excerpts",
-          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
-        },
-        {
-          "step": "created",
-          "text": "Each verdict is stored and shown with a written rationale and quoted excerpts for each of those three kinds of evidence."
-        }
-      ],
-      "refersTo": [
-        {
-          "phrase": "Each verdict",
-          "requirement": "REQ-005",
-          "reason": "The verdicts are the classification decisions REQ-005 produces."
-        },
-        {
-          "phrase": "those three kinds of evidence",
-          "requirement": "REQ-005",
-          "reason": "The three kinds of evidence (commit message, code change, linked pull request or issue text) are named in the merged REQ-005."
+          "reason": "Discovered repositories are those REQ-002 discovers and filters."
         }
       ]
     },
@@ -808,7 +808,7 @@
         {
           "phrase": "the scanned commits",
           "requirement": "REQ-017",
-          "reason": "The scanned commits are the history limited by REQ-017."
+          "reason": "The scan and its limit are defined in REQ-017."
         }
       ]
     },
@@ -861,8 +861,8 @@
       "refersTo": [
         {
           "phrase": "the run",
-          "requirement": "REQ-007",
-          "reason": "The run is the execution stored as one run by REQ-007."
+          "requirement": "REQ-008",
+          "reason": "The run is the stored execution defined in REQ-008."
         }
       ]
     },
@@ -1009,6 +1009,13 @@
           "step": "created",
           "text": "The tool does not start another program to obtain a credential."
         }
+      ],
+      "refersTo": [
+        {
+          "phrase": "a credential",
+          "requirement": "REQ-023",
+          "reason": "The credential is the GitHub token of REQ-023."
+        }
       ]
     },
     {
@@ -1063,7 +1070,7 @@
         {
           "phrase": "Without a token",
           "requirement": "REQ-023",
-          "reason": "The token is the GitHub token that REQ-023 says may be read from the environment."
+          "reason": "The token is the GitHub token of REQ-023."
         }
       ]
     },
@@ -1119,7 +1126,7 @@
         {
           "phrase": "a token",
           "requirement": "REQ-023",
-          "reason": "The token is the GitHub token defined by REQ-023."
+          "reason": "The token is the GitHub token of REQ-023."
         }
       ]
     },
@@ -1175,7 +1182,7 @@
         {
           "phrase": "the .env file",
           "requirement": "REQ-026",
-          "reason": "The .env file is the project's .env file defined by REQ-026."
+          "reason": "The .env file is the project's .env file of REQ-026."
         }
       ]
     },
@@ -1214,6 +1221,13 @@
         {
           "step": "created",
           "text": "The tool clones only repositories on github.com, given as owner/repo or a github.com URL."
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "clones",
+          "requirement": "REQ-003",
+          "reason": "Cloning is the clone REQ-003 produces."
         }
       ]
     },
@@ -1258,7 +1272,7 @@
         {
           "phrase": "any other host",
           "requirement": "REQ-028",
-          "reason": "Any other host is any host other than github.com, which REQ-028 limits cloning to."
+          "reason": "Other hosts are those other than github.com in REQ-028."
         }
       ]
     }
@@ -1473,6 +1487,10 @@
   ],
   "mergedRequirements": [
     {
+      "id": "REQ-011",
+      "mergedInto": "REQ-002"
+    },
+    {
       "id": "REQ-013",
       "mergedInto": "REQ-003"
     },
@@ -1485,8 +1503,12 @@
       "mergedInto": "REQ-005"
     },
     {
+      "id": "REQ-016",
+      "mergedInto": "REQ-006"
+    },
+    {
       "id": "REQ-019",
-      "mergedInto": "REQ-007"
+      "mergedInto": "REQ-008"
     },
     {
       "id": "REQ-020",
