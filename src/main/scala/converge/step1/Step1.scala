@@ -22,6 +22,15 @@ object Step1:
     "specIR", "evidencePolicy", "evidenceLedger", "epochManifest", "controllerState"
   )
 
+  /**
+   * What the elaborator and the reviewer see for one requirement: it, with its evidence, the requirements it refers to,
+   * and the requirements that refer to it (a refinement may point back at what it refines).
+   */
+  def contextFor(entry: SourceEntry, entries: Vector[SourceEntry]): ElaborationContext =
+    ElaborationContext(entry,
+      entry.references.flatMap((phrase, id) => entries.find(_.id == id).map(phrase -> _)),
+      entries.filter(_.binding).flatMap(o => o.references.collect { case (phrase, id) if id == entry.id && o.id != entry.id => phrase -> o }))
+
   /** 1.1 and 1.2: deterministic, and quick. The service runs them before it accepts a request. */
   def prepare(files: Section1Files): (ContractSnapshot, Vector[SourceEntry]) =
     val snapshot = LoadContract.run(files)
@@ -50,7 +59,7 @@ object Step1:
     val fallbacks =
       if nothingKept then Vector(StepRatifier.fallback(context.entry))
       else uncovered.map(span => StepRatifier.fallback(context.entry, Some(span)))
-    val (reviewed, answer) = Review(context.entry, Review.originFor(context.entry), last.constructs, reviewer)
+    val (reviewed, answer) = Review(context.entry, ElaborationPrompt.evidence(context), last.constructs, reviewer)
     Elaborated(context.entry, attempts.toVector, reviewed.filter(_.kept) ++ fallbacks, reviewed ++ fallbacks, answer, uncovered)
 
   def run(files: Section1Files, elaborator: Elaborator, reviewer: Reviewer, maxAttempts: Int,
@@ -58,12 +67,11 @@ object Step1:
     val started = System.nanoTime()
     val (snapshot, entries) = prepare(files)
     val s1 = snapshot.section1
-    val seed = s1.seedPrompt.map(_.text).getOrElse("")
     val binding = entries.filter(_.binding)
 
     val elaborated = binding.zipWithIndex.map { (entry, i) =>
       progress.update(i, binding.size, entry.id)
-      elaborate(ElaborationContext(entry, seed, s1.decisions), s1, elaborator, reviewer, maxAttempts)
+      elaborate(contextFor(entry, entries), s1, elaborator, reviewer, maxAttempts)
     }
     progress.update(binding.size, binding.size, "")
 

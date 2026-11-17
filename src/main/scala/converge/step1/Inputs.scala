@@ -19,7 +19,14 @@ enum Origin:
   case Instructions(file: String, quote: String)
   case Decision(decisionId: String)
 
-final case class Requirement(id: String, kind: String, text: String, origin: Origin, supersedes: Vector[String])
+/**
+ * A requirement of the reconciled contract. `derivation` is Section 1's evidence of how it came to be (the user's quote,
+ * the questions that were open, the decisions that answered them, and the requirements merged into it); `mergedKinds`
+ * are the kinds of the requirements merged into it; `refersTo` pairs a phrase of its text with the requirement that
+ * defines what the phrase names. All three are empty for a contract built before Section 1 recorded them.
+ */
+final case class Requirement(id: String, kind: String, text: String, origin: Origin, supersedes: Vector[String],
+    derivation: Value = ujson.Arr(), mergedKinds: Vector[String] = Vector.empty, refersTo: Vector[(String, String)] = Vector.empty)
 
 /** A design note of the contract: a choice that is not binding on independently built applications. */
 final case class DesignNote(id: String, text: String, origin: Origin)
@@ -84,9 +91,6 @@ final case class Section1(
   def prompt(id: String): Option[RecordedPrompt] = prompts.find(_.id == id)
   def decision(id: String): Option[UserDecision] = decisions.find(_.id == id)
 
-  /** The seed prompt: the first instruction the user typed. */
-  def seedPrompt: Option[RecordedPrompt] = prompts.find(_.kind == "instruction")
-
 object Section1:
   private def str(v: Value, k: String): String = v.objOpt.flatMap(_.get(k)).flatMap(_.strOpt).getOrElse("")
   private def arr(v: Value, k: String): Vector[Value] = v.objOpt.flatMap(_.get(k)).flatMap(_.arrOpt).map(_.toVector).getOrElse(Vector.empty)
@@ -95,7 +99,7 @@ object Section1:
     try ujson.read(text)
     catch case e: Exception => throw Step1Error(s"$name is not valid JSON: ${e.getMessage}")
 
-  private def origin(owner: String, v: Value): Origin =
+  def origin(owner: String, v: Value): Origin =
     str(v, "type") match
       case "prompt"            => Origin.Prompt(str(v, "promptId"), str(v, "quote"))
       case "agentInstructions" => Origin.Instructions(str(v, "file"), str(v, "quote"))
@@ -110,7 +114,10 @@ object Section1:
     val requirements = arr(contract, "requirements").map { r =>
       val id = str(r, "id")
       val o = r.objOpt.flatMap(_.get("origin")).getOrElse(throw Step1Error(s"$id: no origin"))
-      Requirement(id, str(r, "kind"), str(r, "text"), origin(id, o), arr(r, "supersedes").flatMap(_.strOpt))
+      Requirement(id, str(r, "kind"), str(r, "text"), origin(id, o), arr(r, "supersedes").flatMap(_.strOpt),
+        derivation = r.objOpt.flatMap(_.get("derivation")).getOrElse(ujson.Arr()),
+        mergedKinds = arr(r, "mergedKinds").flatMap(_.strOpt),
+        refersTo = arr(r, "refersTo").map(x => str(x, "phrase") -> str(x, "requirement")))
     }
     val designNotes = arr(contract, "designNotes").zipWithIndex.map { (n, i) =>
       val text = str(n, "text")

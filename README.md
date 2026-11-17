@@ -358,10 +358,16 @@ The concrete oracle does not generate the target application and does not assume
 `src/main/scala/converge/step1/` implements CONVERGE Step 1: it takes the reconciled behavioral contract produced by
 GRAIL-DX Section 1 and turns it into the records the rest of CONVERGE works from (contract snapshot, source map, proposed
 and ratified meanings, construct table, specIR, evidence policy and ledger, epoch manifest, controller state).
-A local model (Ollama, `qwen3:4b` by default) is the elaborator. A deterministic ratifier checks each proposed construct:
-its phrase must be copied exactly from the requirement and fit the requirement's kind, a cited answer must be found in
-what the user wrote, and a meaning that introduces a value (number, environment-variable name, flag) no source states is
-kept provisional. Together, the kept constructs must cover every part of the requirement that carries a requirement
+A local model (Ollama, `qwen3:4b` by default) is the elaborator. It works on one requirement at a time and sees only
+that requirement, its evidence from the contract (its `derivation`: the user's quote, the questions that were open and
+the answers chosen, and the requirements Section 1 merged into it) and the requirements its phrases refer to
+(`refersTo`). It is not shown the prompt record or the decision list: the contract already holds what the user said and
+decided, and substep 1.2 verifies that evidence (every quote found where it says, every decision answer equal to
+`decisions.json`, every merged requirement traced to its own source). A question the evidence answers is not open, so
+nothing needs citing; an open question stays open. A deterministic ratifier checks each proposed construct: its phrase
+must be copied exactly from the requirement and fit the requirement's kinds (its own and those merged into it), and a
+meaning that introduces a value (number, environment-variable name, flag) that neither the requirement, its evidence nor
+what it refers to states is kept provisional. Together, the kept constructs must cover every part of the requirement that carries a requirement
 word. Uncovered text is fed back to the elaborator (unless it occurs more than once in the requirement, so that no
 phrase could name it); text still uncovered after the last attempt becomes a fallback construct that stands as
 written. Code cannot check that a free-text meaning says no more than its phrase, so a second model, the reviewer

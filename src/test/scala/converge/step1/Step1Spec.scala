@@ -33,14 +33,12 @@ class Step1Spec extends munit.FunSuite:
   private def causeway: Section1Files = Section1Files.fromDirectory(causewayDir)
   private def approving = ScriptedReviewer.judging(_ => Some(("restates", "")))
 
-  private def construct(phrase: String, slot: String, meaning: String, question: String = "",
-      readings: Vector[String] = Vector.empty, source: String = "none", decision: String = "", quote: String = "") =
-    ProposedConstruct(phrase, slot, meaning, question, readings, source, decision, quote)
+  private def construct(phrase: String, slot: String, meaning: String, question: String = "", readings: Vector[String] = Vector.empty) =
+    ProposedConstruct(phrase, slot, meaning, question, readings)
 
   private def context(id: String): (ElaborationContext, Section1) =
     val (snapshot, entries) = Step1.prepare(causeway)
-    val s1 = snapshot.section1
-    (ElaborationContext(entries.find(_.id == id).get, s1.seedPrompt.get.text, s1.decisions), s1)
+    (Step1.contextFor(entries.find(_.id == id).get, entries), snapshot.section1)
 
   private def ratify(id: String, cs: ProposedConstruct*): Ratification =
     val (ctx, s1) = context(id)
@@ -53,12 +51,12 @@ class Step1Spec extends munit.FunSuite:
 
   test("1.1 fingerprints the Causeway contract and counts its requirements by origin") {
     val snapshot = LoadContract.run(causeway)
-    assertEquals(snapshot.sha256, "b1b12e0278d18a2187a7b89d200eae91518c996990b943f9de7764df32947f0c")
-    assertEquals(snapshot.id, "CS-b1b12e0278d1")
+    assertEquals(snapshot.sha256, "f51474bbaf8f9668e00311347d0458200be45fe8341cbbb0f96a4724e5e490d6")
+    assertEquals(snapshot.id, "CS-f51474bbaf8f")
     val counts = snapshot.toJson("counts")
-    assertEquals(counts("requirements").num.toInt, 29)
+    assertEquals(counts("requirements").num.toInt, 24) // 29 before Section 1 merged five refinements
     assertEquals(counts("fromPrompts").num.toInt, 10)
-    assertEquals(counts("fromDecisions").num.toInt, 19)
+    assertEquals(counts("fromDecisions").num.toInt, 14)
     assertEquals(counts("designNotes").num.toInt, 1)
   }
 
@@ -89,7 +87,7 @@ class Step1Spec extends munit.FunSuite:
         assertEquals(id, "DEC-001")
         assert(answer.startsWith("Fixed built-in criteria"))
       case other => fail(s"REQ-011 has source $other")
-    assertEquals(entries.count(_.binding), 29)
+    assertEquals(entries.count(_.binding), 24)
     val note = entries.filterNot(_.binding)
     assertEquals(note.map(_.id), Vector("DN-01"))
     assertEquals(note.head.source.asInstanceOf[Source.DecisionSource].decisionId, "DEC-003")
@@ -101,6 +99,51 @@ class Step1Spec extends munit.FunSuite:
     val e = intercept[Step1Error](Step1.prepare(edited))
     assertEquals(e.problems.size, 1)
     assert(e.problems.head.startsWith("REQ-003: quote does not occur exactly once in prompt P-0001"), e.problems)
+  }
+
+  // ---- 1.2: the evidence ----
+
+  test("1.2 verifies the evidence: each decision a derivation names, merged requirements included, must match decisions.json") {
+    // REQ-003 absorbed REQ-013 and REQ-014, which came from DEC-002
+    val edited = causeway.copy(decisions = causeway.decisions.replace("may give a commit; otherwise", "may give a commit; else"))
+    val e = intercept[Step1Error](Step1.prepare(edited))
+    assert(e.problems.exists(p => p.startsWith("REQ-013: derivation step 2 (decided)") && p.contains("DEC-002")), e.problems)
+  }
+
+  test("1.2 a reference must name a requirement of the contract") {
+    val c = causeway.contract
+    val ref = "\"requirement\": \"REQ-026\""
+    assertEquals(c.split(java.util.regex.Pattern.quote(ref), -1).length - 1, 1) // only REQ-027's reference names REQ-026
+    val e = intercept[Step1Error](Step1.prepare(causeway.copy(contract = c.replace(ref, "\"requirement\": \"REQ-099\""))))
+    assert(e.problems.exists(_.contains("REQ-027: refers to REQ-099, which is not a requirement")), e.problems)
+  }
+
+  test("1.3 the elaborator sees the requirement, its evidence and what it refers to, never the seed prompt or the other decisions") {
+    val (ctx, _) = context("REQ-003")
+    val prompt = ElaborationPrompt.user(ctx, Vector.empty)
+    assert(prompt.contains("kind: persistentEffect, validInput"), prompt)
+    assert(prompt.contains("Its text before the merge"), prompt)
+    assert(prompt.contains("REQ-013 (validInput)") && prompt.contains("REQ-014 (persistentEffect)"), prompt)
+    assert(prompt.contains("otherwise the tool pins the commit current at that moment"), prompt) // DEC-002's answer
+    assert(prompt.contains("\"the run\" is defined by REQ-007"), prompt)
+    assert(!prompt.contains("<seed_prompt>") && !prompt.contains("owner/repo"), prompt) // DEC-009 is not shown
+    assert(prompt.contains("A question that was open, answered by the decision below"), prompt)
+    // a decision that resolved several items asking the same question shows that question once
+    val shown11 = ElaborationPrompt.evidence(context("REQ-011")._1)
+    assertEquals(shown11.split("What makes a discovered repository", -1).length - 1, 2) // once as asked, once in the decision
+    // REQ-011 ("Discovery returns only ...") refers back to REQ-002, so REQ-002 is shown it
+    val (ctx2, _) = context("REQ-002")
+    assert(ElaborationPrompt.user(ctx2, Vector.empty).contains("REQ-011 (\"Discovery\" there means this requirement)"))
+    // ids of the contract's records are names, not values
+    assertEquals(StepRatifier.valueTokens("The clone of REQ-003, pinned per DEC-002, keeps 50 commits."), Vector("50"))
+    // values the evidence states count as stated
+    assert(ctx.supportingTexts.exists(_.contains("otherwise the tool pins the commit current at that moment")))
+  }
+
+  test("1.4 a merged requirement may use the slots of every kind merged into it") {
+    assertEquals(Slots.allowed(Vector("validInput", "errorHandling")), Vector("precondition", "errorPolicy"))
+    val (ctx, _) = context("REQ-003")
+    assertEquals(ctx.entry.kinds, Vector("persistentEffect", "validInput"))
   }
 
   // ---- 1.4 ----
@@ -125,46 +168,6 @@ class Step1Spec extends munit.FunSuite:
     assertEquals(ruleDeviations(r), Vector.empty)
   }
 
-  test("1.4 accepts a settled reading only when its citation is verified") {
-    // "genuine bug fixes" in REQ-005 (from the seed prompt) is answered by another passage: decision DEC-003
-    val ok = ratify("REQ-005", construct("genuine bug fixes", "postcondition", "A commit counts as a bug fix when the subagent judges it so.",
-      "What makes a bug fix genuine?", Vector("the subagent's judgement", "a fixed formula"), source = "decision", decision = "DEC-003",
-      quote = "The subagent judges from message, change and linked text"))
-    assertEquals(ok.constructs.head.verdict, "accepted")
-    assertEquals(ok.constructs.head.provenance("decision").str, "DEC-003")
-
-    val bad = ratify("REQ-017", construct("limit the scan by a number of commits or a start date", "precondition",
-      "The user may give a commit count or a start date.", "Is the scan limited by count or by date?", Vector("count", "date"), source = "decision",
-      decision = "DEC-004", quote = "the user may pick any limit"))
-    assertEquals(bad.constructs.head.verdict, "openGap")
-    assertEquals(ruleDeviations(bad), Vector.empty) // the question stands as a gap; no new attempt is spent on it
-  }
-
-  test("1.4 does not let a requirement's own source answer a question about it, nor a passage without the values in question") {
-    // qwen3:4b asked "What is the default limit value?" (100 or 50 commits) and cited DEC-004, the decision REQ-017 came from
-    val circular = ratify("REQ-017", construct("without one, a default limit applies", "precondition", "x",
-      "What is the default limit value?", Vector("default limit is 100 commits", "default limit is 50 commits"), source = "origin",
-      decision = "DEC-004", quote = "A user-specified limit or start date with a default limit; merge commits left out"))
-    assertEquals(circular.constructs.head.verdict, "openGap")
-    assert(circular.constructs.head.reason.contains("derived from"), circular.constructs.head.reason)
-
-    val noValue = ratify("REQ-017", construct("without one, a default limit applies", "precondition", "x",
-      "What is the default limit value?", Vector("100 commits", "50 commits"), source = "decision", decision = "DEC-001",
-      quote = "ordered by stars"))
-    assertEquals(noValue.constructs.head.verdict, "openGap")
-    assert(noValue.constructs.head.reason.contains("states none of them"), noValue.constructs.head.reason)
-  }
-
-  test("1.4 finds a citation wherever the user wrote it, whatever source the model named") {
-    // qwen3:4b quoted DEC-002's answer for REQ-003 but labelled it "origin" (REQ-003's origin is prompt P-0001)
-    val r = ratify("REQ-003", construct("checked out at a pinned (fixed, specific) commit", "effect", "x",
-      "What defines the pinned commit?", Vector("given by the user", "current at the time"), source = "origin",
-      quote = "otherwise the tool pins the commit current at that moment"))
-    assertEquals(r.constructs.head.verdict, "accepted")
-    assertEquals(r.constructs.head.provenance("decision").str, "DEC-002")
-    assertEquals(ruleDeviations(r), Vector.empty)
-  }
-
   test("1.4 rejects a slot that does not fit the requirement's kind, and an open question needs two readings") {
     val r = ratify("REQ-017",
       construct("limit the scan by a number of commits or a start date", "effect", "x"),
@@ -174,14 +177,15 @@ class Step1Spec extends munit.FunSuite:
   }
 
   test("1.4 places a phrase of a prompt-backed requirement in the user's prompt") {
-    // "pinned" is in the requirement ("...at a pinned (fixed, specific) commit") and in the user's words ("...at a pinned commit.")
-    val r = ratify("REQ-003", construct("pinned", "effect", "The clone is checked out at one fixed commit."))
+    // "from chat" is in the requirement ("...of the workflow from chat with a slash command") and in the user's words
+    // ("I'll drive it from chat with slash commands.", P-0001 [205, 249])
+    val r = ratify("REQ-001", construct("from chat", "precondition", "The steps are run from the chat."))
     assertEquals(r.constructs.head.verdict, "accepted")
-    assertEquals(r.constructs.head.promptSpan, Some(("P-0001", 476, 482)))
-    val (ctx, _) = context("REQ-003")
-    assertEquals(r.constructs.head.requirementSpan.map(_._1), Some(ctx.entry.text.indexOf("pinned")))
+    assertEquals(r.constructs.head.promptSpan, Some(("P-0001", 219, 228)))
+    val (ctx, _) = context("REQ-001")
+    assertEquals(r.constructs.head.requirementSpan.map(_._1), Some(ctx.entry.text.indexOf("from chat")))
     // a phrase of the requirement that the user never wrote has no place in the prompt
-    val own = ratify("REQ-003", construct("a local clone", "effect", "A copy of the repository exists locally."))
+    val own = ratify("REQ-001", construct("each step of the workflow", "precondition", "Every step can be run."))
     assertEquals(own.constructs.head.promptSpan, None)
   }
 
@@ -278,9 +282,10 @@ class Step1Spec extends munit.FunSuite:
     assertEquals(silent.seen.head._3.map(_.phrase), Vector("The user can limit the scan by a number of commits or a start date"))
     assertEquals(e.constructs.map(_.verdict), Vector("provisional", "provisional"))
     assert(e.constructs.head.reason.contains("could not be reviewed"), e.constructs.head.reason)
-    // a decision-backed requirement is shown to the reviewer with the question and the answer it came from
+    // a decision-backed requirement is shown with the question that was open and the answer chosen
     val (ctx11, _) = context("REQ-011")
-    assert(Review.originFor(ctx11.entry).startsWith("Decision DEC-001. Question:"), Review.originFor(ctx11.entry))
+    val shown = ElaborationPrompt.evidence(ctx11)
+    assert(shown.contains("A question that was open") && shown.contains("Decision DEC-001:") && shown.contains("Fixed built-in criteria"), shown)
   }
 
   test("1.4 the reviewer's reply is read strictly") {
@@ -343,11 +348,11 @@ class Step1Spec extends munit.FunSuite:
     val a = Step1.run(causeway, wholeRequirement, approving, 3)
     assertEquals(a.records.map(_._1), Step1.RecordNames)
     val spec = a.record("specIR")
-    assertEquals(spec("protectedRequirements").arr.size, 29)
-    assertEquals(spec("acceptedMeanings").arr.size, 29)
-    assertEquals(spec("obligations").arr.size, 29)
+    assertEquals(spec("protectedRequirements").arr.size, 24)
+    assertEquals(spec("acceptedMeanings").arr.size, 24)
+    assertEquals(spec("obligations").arr.size, 24)
     assertEquals(spec("variableCandidates").arr.map(_("id").str).toVector, Vector("DN-01"))
-    assertEquals(a.record("evidenceLedger")("entries").arr.size, 29)
+    assertEquals(a.record("evidenceLedger")("entries").arr.size, 24)
     assertEquals(a.record("controllerState")("revision").num.toInt, 0)
     val b = Step1.run(causeway, wholeRequirement, approving, 3)
     assertEquals(a.record("epochManifest")("manifestId"), b.record("epochManifest")("manifestId"))
@@ -356,8 +361,8 @@ class Step1Spec extends munit.FunSuite:
   test("a full run records the review and the coverage in the summary and the reviewer in the epoch") {
     val a = Step1.run(causeway, wholeRequirement, approving, 3)
     val review = a.summary("review")
-    assertEquals(review("calls").num.toInt, 29)
-    assertEquals(review("restates").num.toInt, 29)
+    assertEquals(review("calls").num.toInt, 24)
+    assertEquals(review("restates").num.toInt, 24)
     assertEquals(a.summary("requirementsWithUncoveredText").num.toInt, 0)
     assertEquals(a.record("epochManifest")("reviewer")("type").str, "scripted")
     assert(a.record("epochManifest")("ratifier")("coverage")("stopwords").arr.nonEmpty)
@@ -371,6 +376,10 @@ class Step1Spec extends munit.FunSuite:
     assertEquals(ledger.head("issuer").str, "user (prompt P-0001)")
     assertEquals(ledger(10)("subject").str, "REQ-011")
     assert(ledger(10)("issuer").str.startsWith("assistant"), ledger(10)("issuer").str)
+    // REQ-003 was stated by the user and absorbed requirements from DEC-002, which the assistant answered
+    assertEquals(ledger(2)("subject").str, "REQ-003")
+    assertEquals(ledger(2)("issuer").str, "user (prompt P-0001)")
+    assert(ledger(2)("decisionsAnsweredBy")(0).str.startsWith("assistant"), ledger(2).toString)
   }
 
   // ---- the service ----
@@ -404,7 +413,7 @@ class Step1Spec extends munit.FunSuite:
       assertEquals(status, "done")
       val spec = get(s"/step1/runs/$runId/records/specIR")
       assertEquals(spec.statusCode, 200)
-      assertEquals(ujson.read(spec.body)("protectedRequirements").arr.size, 29)
+      assertEquals(ujson.read(spec.body)("protectedRequirements").arr.size, 24)
       assertEquals(get(s"/step1/runs/$runId/records/nothing").statusCode, 404)
       assertEquals(get("/step1/runs/no-such-run").statusCode, 404)
     finally server.stop(0)

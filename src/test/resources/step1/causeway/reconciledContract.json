@@ -9,7 +9,17 @@
         "type": "prompt",
         "promptId": "P-0001",
         "quote": "I'll drive it from chat with slash commands."
-      }
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "I'll drive it from chat with slash commands."
+          }
+        }
+      ]
     },
     {
       "id": "REQ-002",
@@ -19,17 +29,128 @@
         "type": "prompt",
         "promptId": "P-0001",
         "quote": "Discover candidate repos on GitHub and filter them down to ones worth mining."
-      }
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "Discover candidate repos on GitHub and filter them down to ones worth mining."
+          }
+        }
+      ]
     },
     {
       "id": "REQ-003",
       "kind": "persistentEffect",
-      "text": "Given one chosen repository, the workflow produces a local clone of it checked out at a pinned (fixed, specific) commit.",
+      "text": "The user names the single repository to mine and may give the commit to pin; given that repository, the workflow produces a local clone of it checked out at a pinned (fixed, specific) commit, and when no commit is given, the commit that is current at that moment is pinned and recorded with the run.",
       "origin": {
         "type": "prompt",
         "promptId": "P-0001",
         "quote": "Pick one repo and clone it at a pinned commit."
-      }
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "Pick one repo and clone it at a pinned commit."
+          }
+        },
+        {
+          "step": "merged",
+          "from": [
+            {
+              "id": "REQ-013",
+              "kind": "validInput",
+              "text": "The user names the single repository to mine and may give the commit to pin.",
+              "origin": {
+                "type": "decision",
+                "decision": "DEC-002"
+              },
+              "derivation": [
+                {
+                  "step": "ambiguous",
+                  "items": [
+                    {
+                      "ambiguity": "AMB-002",
+                      "question": "How is the single repository to mine picked, and how is the pinned commit chosen?",
+                      "readings": [
+                        "The user names the repository and the commit explicitly when running the command.",
+                        "The user picks a repository from the filtered list, and the tool pins the commit that is current at that moment.",
+                        "The tool picks the repository automatically (for example the top-ranked one) and pins its current head commit."
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "step": "decided",
+                  "decision": "DEC-002",
+                  "question": "How is the repository to mine picked, and how is the pinned commit chosen?",
+                  "answer": "The user names the repository (from the discovered list or directly) and may give a commit; otherwise the tool pins the commit current at that moment and records it.",
+                  "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+                },
+                {
+                  "step": "created",
+                  "text": "The user names the single repository to mine and may give the commit to pin."
+                }
+              ]
+            },
+            {
+              "id": "REQ-014",
+              "kind": "persistentEffect",
+              "text": "When no commit is given, the commit that is current at that moment is pinned and recorded with the run.",
+              "origin": {
+                "type": "decision",
+                "decision": "DEC-002"
+              },
+              "derivation": [
+                {
+                  "step": "ambiguous",
+                  "items": [
+                    {
+                      "ambiguity": "AMB-002",
+                      "question": "How is the single repository to mine picked, and how is the pinned commit chosen?",
+                      "readings": [
+                        "The user names the repository and the commit explicitly when running the command.",
+                        "The user picks a repository from the filtered list, and the tool pins the commit that is current at that moment.",
+                        "The tool picks the repository automatically (for example the top-ranked one) and pins its current head commit."
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "step": "decided",
+                  "decision": "DEC-002",
+                  "question": "How is the repository to mine picked, and how is the pinned commit chosen?",
+                  "answer": "The user names the repository (from the discovered list or directly) and may give a commit; otherwise the tool pins the commit current at that moment and records it.",
+                  "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+                },
+                {
+                  "step": "created",
+                  "text": "When no commit is given, the commit that is current at that moment is pinned and recorded with the run."
+                }
+              ]
+            }
+          ],
+          "previousText": "Given one chosen repository, the workflow produces a local clone of it checked out at a pinned (fixed, specific) commit.",
+          "text": "The user names the single repository to mine and may give the commit to pin; given that repository, the workflow produces a local clone of it checked out at a pinned (fixed, specific) commit, and when no commit is given, the commit that is current at that moment is pinned and recorded with the run.",
+          "reason": "REQ-013 and REQ-014 answer how the repository and the pinned commit of REQ-003 are chosen.",
+          "proposedBy": "requirement-merger"
+        }
+      ],
+      "mergedKinds": [
+        "validInput"
+      ],
+      "refersTo": [
+        {
+          "phrase": "the run",
+          "requirement": "REQ-007",
+          "reason": "The run is the execution stored as one run by REQ-007."
+        }
+      ]
     },
     {
       "id": "REQ-004",
@@ -39,17 +160,112 @@
         "type": "prompt",
         "promptId": "P-0001",
         "quote": "Enrich its commits with the pull requests and issues linked to them."
-      }
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "Enrich its commits with the pull requests and issues linked to them."
+          }
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "For the cloned repository",
+          "requirement": "REQ-003",
+          "reason": "The cloned repository is the clone REQ-003 produces."
+        }
+      ]
     },
     {
       "id": "REQ-005",
       "kind": "expectedOutput",
-      "text": "The workflow classifies which of the repository's commits are genuine bug fixes, using a subagent to make the classification.",
+      "text": "The workflow classifies which of the repository's commits are genuine bug fixes, using a subagent to make the classification, and each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue.",
       "origin": {
         "type": "prompt",
         "promptId": "P-0001",
         "quote": "Classify which commits are genuine bug fixes."
-      }
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "Classify which commits are genuine bug fixes."
+          }
+        },
+        {
+          "step": "merged",
+          "from": [
+            {
+              "id": "REQ-015",
+              "kind": "expectedOutput",
+              "text": "Each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue.",
+              "origin": {
+                "type": "decision",
+                "decision": "DEC-003"
+              },
+              "derivation": [
+                {
+                  "step": "ambiguous",
+                  "items": [
+                    {
+                      "ambiguity": "AMB-003",
+                      "question": "What counts as a 'genuine' bug fix, and what must the evidence for each call contain?",
+                      "readings": [
+                        "A commit that references a linked issue labelled as a bug, with the evidence being that issue and the commit message.",
+                        "A commit judged by the subagent from its message and code change, with the evidence being a written rationale plus quoted excerpts.",
+                        "Any combination of signals, with evidence listing every signal considered, including those against the call."
+                      ]
+                    },
+                    {
+                      "discovery": "DIS-034",
+                      "what": "The bug-fix verdict is computed in code from fixed weights and a 0.6 threshold that the agent files do not state.",
+                      "question": "What counts as a genuine bug fix: a fixed weighted formula in code, or the subagent's judgement?",
+                      "readings": [
+                        "A formula in code over fixed signals with a threshold",
+                        "The subagent judges from message, change and linked text, and shows a written rationale with quoted excerpts",
+                        "Any combination of signals, listing every signal including those against"
+                      ],
+                      "reason": "The verdict is computed in code from fixed weights and a threshold the agent files do not state."
+                    }
+                  ]
+                },
+                {
+                  "step": "decided",
+                  "decision": "DEC-003",
+                  "question": "What counts as a genuine bug fix: a fixed weighted formula in code, or the subagent's judgement?",
+                  "answer": "The subagent judges from message, change and linked text, and shows a written rationale with quoted excerpts",
+                  "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+                },
+                {
+                  "step": "created",
+                  "text": "Each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue."
+                }
+              ]
+            }
+          ],
+          "previousText": "The workflow classifies which of the repository's commits are genuine bug fixes, using a subagent to make the classification.",
+          "text": "The workflow classifies which of the repository's commits are genuine bug fixes, using a subagent to make the classification, and each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue.",
+          "reason": "REQ-015 answers on what basis the subagent of REQ-005 judges whether a commit is a genuine bug fix.",
+          "proposedBy": "requirement-merger"
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "the repository's commits",
+          "requirement": "REQ-003",
+          "reason": "The repository is the one chosen and cloned under REQ-003."
+        },
+        {
+          "phrase": "linked pull request or issue",
+          "requirement": "REQ-004",
+          "reason": "The linked pull requests and issues are the ones REQ-004 enriches each commit with."
+        }
+      ]
     },
     {
       "id": "REQ-006",
@@ -59,27 +275,161 @@
         "type": "prompt",
         "promptId": "P-0001",
         "quote": "I want to see the evidence for each call, not only a yes or no."
-      }
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "I want to see the evidence for each call, not only a yes or no."
+          }
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "Each classification decision",
+          "requirement": "REQ-005",
+          "reason": "The classification decisions are the verdicts REQ-005 produces."
+        }
+      ]
     },
     {
       "id": "REQ-007",
       "kind": "persistentEffect",
-      "text": "Everything the workflow finds is stored in a local database that persists between runs.",
+      "text": "Everything the workflow finds is stored in a local database that persists between runs, and each execution of the pipeline on a repository is stored as one run.",
       "origin": {
         "type": "prompt",
         "promptId": "P-0001",
         "quote": "Keep everything in a local database, so I can list past runs and see how many"
-      }
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "Keep everything in a local database, so I can list past runs and see how many"
+          }
+        },
+        {
+          "step": "merged",
+          "from": [
+            {
+              "id": "REQ-019",
+              "kind": "persistentEffect",
+              "text": "Each execution of the pipeline on a repository is stored as one run.",
+              "origin": {
+                "type": "decision",
+                "decision": "DEC-005"
+              },
+              "derivation": [
+                {
+                  "step": "ambiguous",
+                  "items": [
+                    {
+                      "ambiguity": "AMB-005",
+                      "question": "What is a 'run', and what does the list of past runs show?",
+                      "readings": [
+                        "A run is one execution of the whole pipeline on one repository, and the list shows one row per run with its bug-fix count.",
+                        "A run is one execution of any single command, and the list shows each command execution separately.",
+                        "A run is one execution of the classification step only, and the bug-fix count is the number of commits it classified as bug fixes."
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "step": "decided",
+                  "decision": "DEC-005",
+                  "question": "What is a run, and what does the list of past runs show?",
+                  "answer": "A run is one execution of the whole pipeline on one repository; the list shows one row per run with its bug-fix count.",
+                  "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+                },
+                {
+                  "step": "created",
+                  "text": "Each execution of the pipeline on a repository is stored as one run."
+                }
+              ]
+            }
+          ],
+          "previousText": "Everything the workflow finds is stored in a local database that persists between runs.",
+          "text": "Everything the workflow finds is stored in a local database that persists between runs, and each execution of the pipeline on a repository is stored as one run.",
+          "reason": "REQ-019 answers what a run is, which REQ-007 leaves open when it refers to runs.",
+          "proposedBy": "requirement-merger"
+        }
+      ]
     },
     {
       "id": "REQ-008",
       "kind": "expectedOutput",
-      "text": "The user can list past runs.",
+      "text": "The user can list past runs; the list shows one row per run with its repository and the number of bug fixes it found.",
       "origin": {
         "type": "prompt",
         "promptId": "P-0001",
         "quote": "Keep everything in a local database, so I can list past runs and see how many"
-      }
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "Keep everything in a local database, so I can list past runs and see how many"
+          }
+        },
+        {
+          "step": "merged",
+          "from": [
+            {
+              "id": "REQ-020",
+              "kind": "expectedOutput",
+              "text": "The list of past runs shows one row per run with its repository and the number of bug fixes it found.",
+              "origin": {
+                "type": "decision",
+                "decision": "DEC-005"
+              },
+              "derivation": [
+                {
+                  "step": "ambiguous",
+                  "items": [
+                    {
+                      "ambiguity": "AMB-005",
+                      "question": "What is a 'run', and what does the list of past runs show?",
+                      "readings": [
+                        "A run is one execution of the whole pipeline on one repository, and the list shows one row per run with its bug-fix count.",
+                        "A run is one execution of any single command, and the list shows each command execution separately.",
+                        "A run is one execution of the classification step only, and the bug-fix count is the number of commits it classified as bug fixes."
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "step": "decided",
+                  "decision": "DEC-005",
+                  "question": "What is a run, and what does the list of past runs show?",
+                  "answer": "A run is one execution of the whole pipeline on one repository; the list shows one row per run with its bug-fix count.",
+                  "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+                },
+                {
+                  "step": "created",
+                  "text": "The list of past runs shows one row per run with its repository and the number of bug fixes it found."
+                }
+              ]
+            }
+          ],
+          "previousText": "The user can list past runs.",
+          "text": "The user can list past runs; the list shows one row per run with its repository and the number of bug fixes it found.",
+          "reason": "REQ-020 answers what the list of past runs of REQ-008 shows.",
+          "proposedBy": "requirement-merger"
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "past runs",
+          "requirement": "REQ-007",
+          "reason": "Past runs are the runs stored by REQ-007."
+        }
+      ]
     },
     {
       "id": "REQ-009",
@@ -89,7 +439,24 @@
         "type": "prompt",
         "promptId": "P-0001",
         "quote": "bug fixes each run found."
-      }
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "bug fixes each run found."
+          }
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "For each past run",
+          "requirement": "REQ-007",
+          "reason": "Past runs are the runs stored by REQ-007."
+        }
+      ]
     },
     {
       "id": "REQ-010",
@@ -99,7 +466,17 @@
         "type": "prompt",
         "promptId": "P-0001",
         "quote": "Don't let the agents run arbitrary shell commands."
-      }
+      },
+      "derivation": [
+        {
+          "step": "stated",
+          "source": {
+            "type": "prompt",
+            "promptId": "P-0001",
+            "quote": "Don't let the agents run arbitrary shell commands."
+          }
+        }
+      ]
     },
     {
       "id": "REQ-011",
@@ -108,7 +485,74 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-001"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "ambiguity": "AMB-001",
+              "question": "What makes a discovered repository 'worth mining'?",
+              "readings": [
+                "A fixed set of criteria built into the tool (for example activity, size or number of bug-fix commits).",
+                "Criteria the user supplies as options on each run.",
+                "A ranking in which the user decides which repositories are worth mining."
+              ]
+            },
+            {
+              "discovery": "DIS-024",
+              "what": "Search fetches a single page of at most 100 repositories sorted by stars, sized from max-results (default 10).",
+              "question": "What makes a discovered repository worth mining?",
+              "readings": [
+                "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+                "Criteria the user supplies on each run",
+                "The user decides from an unfiltered ranking"
+              ],
+              "reason": "One page of at most 100 repositories ordered by stars decides what discovery can return."
+            },
+            {
+              "discovery": "DIS-025",
+              "what": "Every search query is forced to exclude forks and archived repos and to be public, regardless of the user's request.",
+              "question": "What makes a discovered repository worth mining?",
+              "readings": [
+                "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+                "Criteria the user supplies on each run",
+                "The user decides from an unfiltered ranking"
+              ],
+              "reason": "Forks and archived repositories are always excluded, whatever the user asks."
+            },
+            {
+              "discovery": "DIS-027",
+              "what": "A repo qualifies only if it has at least one closed issue or merged PR.",
+              "question": "What makes a discovered repository worth mining?",
+              "readings": [
+                "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+                "Criteria the user supplies on each run",
+                "The user decides from an unfiltered ranking"
+              ],
+              "reason": "Qualifying only with a closed issue or merged PR is a filter the prompts do not state."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-001",
+          "question": "What makes a discovered repository worth mining?",
+          "answer": "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "Discovery returns only public repositories that are not forks, not archived, and have at least one closed issue or merged pull request."
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "Discovery",
+          "requirement": "REQ-002",
+          "reason": "Discovery is the step of REQ-002 that finds and filters repositories."
+        }
+      ]
     },
     {
       "id": "REQ-012",
@@ -117,34 +561,74 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-001"
-      }
-    },
-    {
-      "id": "REQ-013",
-      "kind": "validInput",
-      "text": "The user names the single repository to mine and may give the commit to pin.",
-      "origin": {
-        "type": "decision",
-        "decision": "DEC-002"
-      }
-    },
-    {
-      "id": "REQ-014",
-      "kind": "persistentEffect",
-      "text": "When no commit is given, the commit that is current at that moment is pinned and recorded with the run.",
-      "origin": {
-        "type": "decision",
-        "decision": "DEC-002"
-      }
-    },
-    {
-      "id": "REQ-015",
-      "kind": "expectedOutput",
-      "text": "Each commit's bug-fix verdict is judged by the subagent from its commit message, its code change and the text of its linked pull request or issue.",
-      "origin": {
-        "type": "decision",
-        "decision": "DEC-003"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "ambiguity": "AMB-001",
+              "question": "What makes a discovered repository 'worth mining'?",
+              "readings": [
+                "A fixed set of criteria built into the tool (for example activity, size or number of bug-fix commits).",
+                "Criteria the user supplies as options on each run.",
+                "A ranking in which the user decides which repositories are worth mining."
+              ]
+            },
+            {
+              "discovery": "DIS-024",
+              "what": "Search fetches a single page of at most 100 repositories sorted by stars, sized from max-results (default 10).",
+              "question": "What makes a discovered repository worth mining?",
+              "readings": [
+                "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+                "Criteria the user supplies on each run",
+                "The user decides from an unfiltered ranking"
+              ],
+              "reason": "One page of at most 100 repositories ordered by stars decides what discovery can return."
+            },
+            {
+              "discovery": "DIS-025",
+              "what": "Every search query is forced to exclude forks and archived repos and to be public, regardless of the user's request.",
+              "question": "What makes a discovered repository worth mining?",
+              "readings": [
+                "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+                "Criteria the user supplies on each run",
+                "The user decides from an unfiltered ranking"
+              ],
+              "reason": "Forks and archived repositories are always excluded, whatever the user asks."
+            },
+            {
+              "discovery": "DIS-027",
+              "what": "A repo qualifies only if it has at least one closed issue or merged PR.",
+              "question": "What makes a discovered repository worth mining?",
+              "readings": [
+                "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+                "Criteria the user supplies on each run",
+                "The user decides from an unfiltered ranking"
+              ],
+              "reason": "Qualifying only with a closed issue or merged PR is a filter the prompts do not state."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-001",
+          "question": "What makes a discovered repository worth mining?",
+          "answer": "Fixed built-in criteria (public, not a fork, not archived, at least one closed issue or merged PR), ordered by stars",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "Discovered repositories are shown ordered by star count, up to the number of results the user asked for (default 10)."
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "Discovered repositories",
+          "requirement": "REQ-002",
+          "reason": "The discovered repositories are the filtered list REQ-002 produces."
+        }
+      ]
     },
     {
       "id": "REQ-016",
@@ -153,7 +637,57 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-003"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "ambiguity": "AMB-003",
+              "question": "What counts as a 'genuine' bug fix, and what must the evidence for each call contain?",
+              "readings": [
+                "A commit that references a linked issue labelled as a bug, with the evidence being that issue and the commit message.",
+                "A commit judged by the subagent from its message and code change, with the evidence being a written rationale plus quoted excerpts.",
+                "Any combination of signals, with evidence listing every signal considered, including those against the call."
+              ]
+            },
+            {
+              "discovery": "DIS-034",
+              "what": "The bug-fix verdict is computed in code from fixed weights and a 0.6 threshold that the agent files do not state.",
+              "question": "What counts as a genuine bug fix: a fixed weighted formula in code, or the subagent's judgement?",
+              "readings": [
+                "A formula in code over fixed signals with a threshold",
+                "The subagent judges from message, change and linked text, and shows a written rationale with quoted excerpts",
+                "Any combination of signals, listing every signal including those against"
+              ],
+              "reason": "The verdict is computed in code from fixed weights and a threshold the agent files do not state."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-003",
+          "question": "What counts as a genuine bug fix: a fixed weighted formula in code, or the subagent's judgement?",
+          "answer": "The subagent judges from message, change and linked text, and shows a written rationale with quoted excerpts",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "Each verdict is stored and shown with a written rationale and quoted excerpts for each of those three kinds of evidence."
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "Each verdict",
+          "requirement": "REQ-005",
+          "reason": "The verdicts are the classification decisions REQ-005 produces."
+        },
+        {
+          "phrase": "those three kinds of evidence",
+          "requirement": "REQ-005",
+          "reason": "The three kinds of evidence (commit message, code change, linked pull request or issue text) are named in the merged REQ-005."
+        }
+      ]
     },
     {
       "id": "REQ-017",
@@ -162,7 +696,56 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-004"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "ambiguity": "AMB-004",
+              "question": "How much history of the repository is enriched and classified?",
+              "readings": [
+                "Every commit reachable from the pinned commit.",
+                "Only commits within a user-specified range or limit.",
+                "Only commits that have a linked pull request or issue."
+              ]
+            },
+            {
+              "discovery": "DIS-021",
+              "what": "Merge commits are never recorded, and --since filters on author date.",
+              "question": "How much history is scanned, and are merge commits scanned?",
+              "readings": [
+                "Every commit reachable from the pinned commit, merges included",
+                "A user-specified limit or start date with a default limit; merge commits left out",
+                "Only commits with a linked pull request or issue"
+              ],
+              "reason": "Merge commits are never recorded and --since uses author date, which decides which commits are scanned."
+            },
+            {
+              "discovery": "DIS-023",
+              "what": "Default scan limit is 100 commits and run ids are the first 8 characters of a random UUID.",
+              "question": "How much history is scanned, and are merge commits scanned?",
+              "readings": [
+                "Every commit reachable from the pinned commit, merges included",
+                "A user-specified limit or start date with a default limit; merge commits left out",
+                "Only commits with a linked pull request or issue"
+              ],
+              "reason": "A default scan limit of 100 commits decides how much history is scanned."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-004",
+          "question": "How much history is scanned, and are merge commits scanned?",
+          "answer": "A user-specified limit or start date with a default limit; merge commits left out",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "The user can limit the scan by a number of commits or a start date; without one, a default limit applies."
+        }
+      ]
     },
     {
       "id": "REQ-018",
@@ -171,25 +754,63 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-004"
-      }
-    },
-    {
-      "id": "REQ-019",
-      "kind": "persistentEffect",
-      "text": "Each execution of the pipeline on a repository is stored as one run.",
-      "origin": {
-        "type": "decision",
-        "decision": "DEC-005"
-      }
-    },
-    {
-      "id": "REQ-020",
-      "kind": "expectedOutput",
-      "text": "The list of past runs shows one row per run with its repository and the number of bug fixes it found.",
-      "origin": {
-        "type": "decision",
-        "decision": "DEC-005"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "ambiguity": "AMB-004",
+              "question": "How much history of the repository is enriched and classified?",
+              "readings": [
+                "Every commit reachable from the pinned commit.",
+                "Only commits within a user-specified range or limit.",
+                "Only commits that have a linked pull request or issue."
+              ]
+            },
+            {
+              "discovery": "DIS-021",
+              "what": "Merge commits are never recorded, and --since filters on author date.",
+              "question": "How much history is scanned, and are merge commits scanned?",
+              "readings": [
+                "Every commit reachable from the pinned commit, merges included",
+                "A user-specified limit or start date with a default limit; merge commits left out",
+                "Only commits with a linked pull request or issue"
+              ],
+              "reason": "Merge commits are never recorded and --since uses author date, which decides which commits are scanned."
+            },
+            {
+              "discovery": "DIS-023",
+              "what": "Default scan limit is 100 commits and run ids are the first 8 characters of a random UUID.",
+              "question": "How much history is scanned, and are merge commits scanned?",
+              "readings": [
+                "Every commit reachable from the pinned commit, merges included",
+                "A user-specified limit or start date with a default limit; merge commits left out",
+                "Only commits with a linked pull request or issue"
+              ],
+              "reason": "A default scan limit of 100 commits decides how much history is scanned."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-004",
+          "question": "How much history is scanned, and are merge commits scanned?",
+          "answer": "A user-specified limit or start date with a default limit; merge commits left out",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "Merge commits are not counted among the scanned commits."
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "the scanned commits",
+          "requirement": "REQ-017",
+          "reason": "The scanned commits are the history limited by REQ-017."
+        }
+      ]
     },
     {
       "id": "REQ-021",
@@ -198,7 +819,52 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-006"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "ambiguity": "AMB-006",
+              "question": "What happens on failures such as an unreachable or rate-limited GitHub, a nonexistent repository or commit, or a repository that was already mined?",
+              "readings": [
+                "The command stops with an error message and stores nothing for that run.",
+                "The command keeps what it already collected, records the run as incomplete, and reports the error.",
+                "A repeated run on the same repository and commit replaces the previous results, instead of adding a new run."
+              ]
+            },
+            {
+              "discovery": "DIS-030",
+              "what": "Per-commit GitHub failures during enrich are collected and not raised; the command still exits 0 and the run is marked enriched unless every commit failed.",
+              "question": "When some GitHub lookups fail during enrichment, what happens?",
+              "readings": [
+                "The command stops and stores nothing for the run",
+                "The command keeps what it collected, reports each failure and records the run as incomplete",
+                "Failures are collected and the run is still marked complete"
+              ],
+              "reason": "Per-commit failures are collected, the command exits 0 and the run is marked enriched, which hides partial results."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-006",
+          "question": "When some GitHub lookups fail during enrichment, what happens?",
+          "answer": "The command keeps what it collected, reports each failure and records the run as incomplete",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "When some GitHub lookups fail, the command keeps what it collected, reports each failure to the user and records the run as incomplete."
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "the run",
+          "requirement": "REQ-007",
+          "reason": "The run is the execution stored as one run by REQ-007."
+        }
+      ]
     },
     {
       "id": "REQ-022",
@@ -207,7 +873,45 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-006"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "ambiguity": "AMB-006",
+              "question": "What happens on failures such as an unreachable or rate-limited GitHub, a nonexistent repository or commit, or a repository that was already mined?",
+              "readings": [
+                "The command stops with an error message and stores nothing for that run.",
+                "The command keeps what it already collected, records the run as incomplete, and reports the error.",
+                "A repeated run on the same repository and commit replaces the previous results, instead of adding a new run."
+              ]
+            },
+            {
+              "discovery": "DIS-030",
+              "what": "Per-commit GitHub failures during enrich are collected and not raised; the command still exits 0 and the run is marked enriched unless every commit failed.",
+              "question": "When some GitHub lookups fail during enrichment, what happens?",
+              "readings": [
+                "The command stops and stores nothing for the run",
+                "The command keeps what it collected, reports each failure and records the run as incomplete",
+                "Failures are collected and the run is still marked complete"
+              ],
+              "reason": "Per-commit failures are collected, the command exits 0 and the run is marked enriched, which hides partial results."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-006",
+          "question": "When some GitHub lookups fail during enrichment, what happens?",
+          "answer": "The command keeps what it collected, reports each failure and records the run as incomplete",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "When GitHub is unreachable or rate-limited, or a repository or commit does not exist, the user is told what failed."
+        }
+      ]
     },
     {
       "id": "REQ-023",
@@ -216,7 +920,47 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-007"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "discovery": "DIS-002",
+              "what": "The GitHub token is taken from GITHUB_TOKEN, then GH_TOKEN, then from the gh CLI.",
+              "question": "May the tool obtain and use a GitHub credential, and where from?",
+              "readings": [
+                "Allowed as it is: token from GITHUB_TOKEN, GH_TOKEN, or by running `gh auth token`",
+                "Limited: token only from the GITHUB_TOKEN or GH_TOKEN environment variables, sent only to GitHub, and no other program is started to get it",
+                "Not allowed: always unauthenticated"
+              ],
+              "reason": "Credential taken from environment variables or the gh CLI is a permission matter."
+            },
+            {
+              "discovery": "DIS-003",
+              "what": "The program starts an external process, `gh auth token`, to obtain a credential; any failure silently becomes no token.",
+              "question": "May the tool obtain and use a GitHub credential, and where from?",
+              "readings": [
+                "Allowed as it is: token from GITHUB_TOKEN, GH_TOKEN, or by running `gh auth token`",
+                "Limited: token only from the GITHUB_TOKEN or GH_TOKEN environment variables, sent only to GitHub, and no other program is started to get it",
+                "Not allowed: always unauthenticated"
+              ],
+              "reason": "Starting `gh auth token` to obtain a credential starts another program."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-007",
+          "question": "May the tool obtain and use a GitHub credential, and where from?",
+          "answer": "Limited: token only from the GITHUB_TOKEN or GH_TOKEN environment variables, sent only to GitHub, and no other program is started to get it",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "A GitHub token may be read from the environment variables GITHUB_TOKEN or GH_TOKEN and is sent only to GitHub."
+        }
+      ]
     },
     {
       "id": "REQ-024",
@@ -225,7 +969,47 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-007"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "discovery": "DIS-002",
+              "what": "The GitHub token is taken from GITHUB_TOKEN, then GH_TOKEN, then from the gh CLI.",
+              "question": "May the tool obtain and use a GitHub credential, and where from?",
+              "readings": [
+                "Allowed as it is: token from GITHUB_TOKEN, GH_TOKEN, or by running `gh auth token`",
+                "Limited: token only from the GITHUB_TOKEN or GH_TOKEN environment variables, sent only to GitHub, and no other program is started to get it",
+                "Not allowed: always unauthenticated"
+              ],
+              "reason": "Credential taken from environment variables or the gh CLI is a permission matter."
+            },
+            {
+              "discovery": "DIS-003",
+              "what": "The program starts an external process, `gh auth token`, to obtain a credential; any failure silently becomes no token.",
+              "question": "May the tool obtain and use a GitHub credential, and where from?",
+              "readings": [
+                "Allowed as it is: token from GITHUB_TOKEN, GH_TOKEN, or by running `gh auth token`",
+                "Limited: token only from the GITHUB_TOKEN or GH_TOKEN environment variables, sent only to GitHub, and no other program is started to get it",
+                "Not allowed: always unauthenticated"
+              ],
+              "reason": "Starting `gh auth token` to obtain a credential starts another program."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-007",
+          "question": "May the tool obtain and use a GitHub credential, and where from?",
+          "answer": "Limited: token only from the GITHUB_TOKEN or GH_TOKEN environment variables, sent only to GitHub, and no other program is started to get it",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "The tool does not start another program to obtain a credential."
+        }
+      ]
     },
     {
       "id": "REQ-025",
@@ -234,7 +1018,54 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-007"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "discovery": "DIS-002",
+              "what": "The GitHub token is taken from GITHUB_TOKEN, then GH_TOKEN, then from the gh CLI.",
+              "question": "May the tool obtain and use a GitHub credential, and where from?",
+              "readings": [
+                "Allowed as it is: token from GITHUB_TOKEN, GH_TOKEN, or by running `gh auth token`",
+                "Limited: token only from the GITHUB_TOKEN or GH_TOKEN environment variables, sent only to GitHub, and no other program is started to get it",
+                "Not allowed: always unauthenticated"
+              ],
+              "reason": "Credential taken from environment variables or the gh CLI is a permission matter."
+            },
+            {
+              "discovery": "DIS-003",
+              "what": "The program starts an external process, `gh auth token`, to obtain a credential; any failure silently becomes no token.",
+              "question": "May the tool obtain and use a GitHub credential, and where from?",
+              "readings": [
+                "Allowed as it is: token from GITHUB_TOKEN, GH_TOKEN, or by running `gh auth token`",
+                "Limited: token only from the GITHUB_TOKEN or GH_TOKEN environment variables, sent only to GitHub, and no other program is started to get it",
+                "Not allowed: always unauthenticated"
+              ],
+              "reason": "Starting `gh auth token` to obtain a credential starts another program."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-007",
+          "question": "May the tool obtain and use a GitHub credential, and where from?",
+          "answer": "Limited: token only from the GITHUB_TOKEN or GH_TOKEN environment variables, sent only to GitHub, and no other program is started to get it",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "Without a token the tool continues unauthenticated and tells the user that rate limits are lower."
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "Without a token",
+          "requirement": "REQ-023",
+          "reason": "The token is the GitHub token that REQ-023 says may be read from the environment."
+        }
+      ]
     },
     {
       "id": "REQ-026",
@@ -243,7 +1074,54 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-008"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "discovery": "DIS-007",
+              "what": "The launcher sources .env as shell code, so anything in .env is executed and exported, not only GITHUB_TOKEN.",
+              "question": "May the launcher read the project's .env file, and may that file be executed?",
+              "readings": [
+                "Allowed as it is: .env is run as shell code and everything in it is exported",
+                "Limited: .env is read as plain data for the token only, never executed",
+                "Not allowed: .env is not read"
+              ],
+              "reason": "The launcher executes .env as shell code and exports all of it."
+            },
+            {
+              "discovery": "DIS-008",
+              "what": ".claude/settings.json denies the agent reading .env, while the launcher itself reads it.",
+              "question": "May the launcher read the project's .env file, and may that file be executed?",
+              "readings": [
+                "Allowed as it is: .env is run as shell code and everything in it is exported",
+                "Limited: .env is read as plain data for the token only, never executed",
+                "Not allowed: .env is not read"
+              ],
+              "reason": "The agent is denied reading .env while the launcher reads it; part of the same file-access question."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-008",
+          "question": "May the launcher read the project's .env file, and may that file be executed?",
+          "answer": "Limited: .env is read as plain data for the token only, never executed",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "The launcher may read a token from the project's .env file as plain data but never executes it."
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "a token",
+          "requirement": "REQ-023",
+          "reason": "The token is the GitHub token defined by REQ-023."
+        }
+      ]
     },
     {
       "id": "REQ-027",
@@ -252,7 +1130,54 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-008"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "discovery": "DIS-007",
+              "what": "The launcher sources .env as shell code, so anything in .env is executed and exported, not only GITHUB_TOKEN.",
+              "question": "May the launcher read the project's .env file, and may that file be executed?",
+              "readings": [
+                "Allowed as it is: .env is run as shell code and everything in it is exported",
+                "Limited: .env is read as plain data for the token only, never executed",
+                "Not allowed: .env is not read"
+              ],
+              "reason": "The launcher executes .env as shell code and exports all of it."
+            },
+            {
+              "discovery": "DIS-008",
+              "what": ".claude/settings.json denies the agent reading .env, while the launcher itself reads it.",
+              "question": "May the launcher read the project's .env file, and may that file be executed?",
+              "readings": [
+                "Allowed as it is: .env is run as shell code and everything in it is exported",
+                "Limited: .env is read as plain data for the token only, never executed",
+                "Not allowed: .env is not read"
+              ],
+              "reason": "The agent is denied reading .env while the launcher reads it; part of the same file-access question."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-008",
+          "question": "May the launcher read the project's .env file, and may that file be executed?",
+          "answer": "Limited: .env is read as plain data for the token only, never executed",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "Agents cannot read the .env file."
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "the .env file",
+          "requirement": "REQ-026",
+          "reason": "The .env file is the project's .env file defined by REQ-026."
+        }
+      ]
     },
     {
       "id": "REQ-028",
@@ -261,7 +1186,36 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-009"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "discovery": "DIS-017",
+              "what": "inspect-repo clones every branch of the repository, and a --url value other than owner/repo form is handed to git unchanged (any URL or path).",
+              "question": "Which repositories and hosts may the tool clone from?",
+              "readings": [
+                "Allowed as it is: any URL or local path handed to git",
+                "Limited: only repositories on github.com, given as owner/repo or a github.com URL",
+                "Not allowed: only repositories found by the search"
+              ],
+              "reason": "Any URL or local path is handed to git, which can reach hosts other than GitHub or local files."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-009",
+          "question": "Which repositories and hosts may the tool clone from?",
+          "answer": "Limited: only repositories on github.com, given as owner/repo or a github.com URL",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "The tool clones only repositories on github.com, given as owner/repo or a github.com URL."
+        }
+      ]
     },
     {
       "id": "REQ-029",
@@ -270,7 +1224,43 @@
       "origin": {
         "type": "decision",
         "decision": "DEC-009"
-      }
+      },
+      "derivation": [
+        {
+          "step": "ambiguous",
+          "items": [
+            {
+              "discovery": "DIS-017",
+              "what": "inspect-repo clones every branch of the repository, and a --url value other than owner/repo form is handed to git unchanged (any URL or path).",
+              "question": "Which repositories and hosts may the tool clone from?",
+              "readings": [
+                "Allowed as it is: any URL or local path handed to git",
+                "Limited: only repositories on github.com, given as owner/repo or a github.com URL",
+                "Not allowed: only repositories found by the search"
+              ],
+              "reason": "Any URL or local path is handed to git, which can reach hosts other than GitHub or local files."
+            }
+          ]
+        },
+        {
+          "step": "decided",
+          "decision": "DEC-009",
+          "question": "Which repositories and hosts may the tool clone from?",
+          "answer": "Limited: only repositories on github.com, given as owner/repo or a github.com URL",
+          "answeredBy": "assistant (test run: the user asked me to use my own judgement instead of asking)"
+        },
+        {
+          "step": "created",
+          "text": "A repository on any other host, or a local path, is refused with an error and nothing is cloned."
+        }
+      ],
+      "refersTo": [
+        {
+          "phrase": "any other host",
+          "requirement": "REQ-028",
+          "reason": "Any other host is any host other than github.com, which REQ-028 limits cloning to."
+        }
+      ]
     }
   ],
   "resolvedAmbiguities": [
@@ -479,6 +1469,28 @@
       "discovery": "DIS-039",
       "coveredBy": "REQ-010",
       "reason": "The guard hook is the mechanism that keeps agents from running arbitrary shell commands, which the prompt asks for."
+    }
+  ],
+  "mergedRequirements": [
+    {
+      "id": "REQ-013",
+      "mergedInto": "REQ-003"
+    },
+    {
+      "id": "REQ-014",
+      "mergedInto": "REQ-003"
+    },
+    {
+      "id": "REQ-015",
+      "mergedInto": "REQ-005"
+    },
+    {
+      "id": "REQ-019",
+      "mergedInto": "REQ-007"
+    },
+    {
+      "id": "REQ-020",
+      "mergedInto": "REQ-008"
     }
   ]
 }

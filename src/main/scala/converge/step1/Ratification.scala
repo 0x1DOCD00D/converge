@@ -6,11 +6,11 @@ import ujson.Value
  * 1.4: a construct after the ratifier has judged it.
  *
  * verdict:
- *  - accepted:    the phrase is part of the requirement, its reading is fixed by the requirement or by a verified citation,
- *                 and the reviewer found that the meaning only restates that text (see Review.scala);
+ *  - accepted:    the phrase is part of the requirement, its reading is fixed by the requirement and its evidence, and
+ *                 the reviewer found that the meaning only restates that text (see Review.scala);
  *  - provisional: the reading may be right, but it introduces something (a value, a name, or anything else the reviewer
  *                 found the text does not say) that no accepted source states;
- *  - openGap:     the model found a question the phrase leaves open, and no accepted source answers it;
+ *  - openGap:     the model found a question the phrase leaves open, given the requirement and its evidence;
  *  - rejected:    the proposal is not about this requirement (the phrase is not in it, or the slot does not fit its kind).
  */
 final case class RatifiedConstruct(
@@ -87,9 +87,15 @@ object StepRatifier:
       else None
     }
 
-  /** Values a reading states: numbers, environment-variable-style names and command-line flags. */
+  private val RecordId = """\b[A-Z]{2,}-\d+\b""".r
+
+  /**
+   * Values a reading states: numbers, environment-variable-style names and command-line flags. The ids of records
+   * (REQ-003, DEC-002) are names of the contract, not values, and are ignored.
+   */
   def valueTokens(meaning: String): Vector[String] =
-    (Number.findAllIn(meaning) ++ EnvName.findAllIn(meaning) ++ Flag.findAllIn(meaning)).toVector.distinct
+    val m = RecordId.replaceAllIn(meaning, " ")
+    (Number.findAllIn(m) ++ EnvName.findAllIn(m) ++ Flag.findAllIn(m)).toVector.distinct
 
   /** The values of `meaning` that none of the accepted texts contains. */
   def unsupportedValues(meaning: String, accepted: Seq[String]): Vector[String] =
@@ -98,31 +104,6 @@ object StepRatifier:
       if v.head.isDigit then s"""(?<![\\w.])${java.util.regex.Pattern.quote(v)}(?![\\w])""".r.findFirstIn(corpus).nonEmpty
       else corpus.contains(v)
     }
-
-  /** The user's words this requirement came from, which a "settled" citation with source "origin" may quote. */
-  def originText(context: ElaborationContext, s1: Section1): String = context.entry.source match
-    case Source.PromptSpan(id, field, _, _, _) =>
-      s1.prompt(id).map(p => if field == "answer" then p.answer.getOrElse("") else p.text).getOrElse("")
-    case Source.InstructionSpan(file, _, _, _) => s1.files.instructions.getOrElse(file, "")
-    case Source.DecisionSource(_, _, answer, _) => answer
-
-  /**
-   * The texts a "settled" citation may quote, all written or chosen by the user: the requirement, its origin, the seed
-   * prompt and every decision answer. The source the model named is tried first.
-   */
-  def citationSources(context: ElaborationContext, s1: Section1, c: ProposedConstruct): Vector[(String, ujson.Obj)] =
-    val entry = context.entry
-    val requirement = Vector(entry.text -> ujson.Obj("type" -> "requirement", "requirementId" -> entry.id))
-    val origin = Vector(originText(context, s1) -> ujson.Obj("type" -> "origin", "requirementId" -> entry.id, "source" -> entry.source.toJson))
-    val seed = s1.seedPrompt.toVector.map(p => p.text -> ujson.Obj("type" -> "prompt", "promptId" -> p.id))
-    val decisions = s1.decisions.map(d => d.answer -> ujson.Obj("type" -> "decision", "decision" -> d.id, "answeredBy" -> d.answeredBy))
-    val named = decisions.filter(_._2("decision").str == c.citationDecision)
-    val preferred = c.citationSource match
-      case "decision"    => named
-      case "requirement" => requirement
-      case "origin"      => origin
-      case _             => Vector.empty
-    (preferred ++ named ++ origin ++ requirement ++ seed ++ decisions).distinctBy(_._2)
 
   /** Where a phrase sits in the user's prompt, when the requirement is a prompt quote containing it once. */
   private def promptSpan(entry: SourceEntry, phrase: String, s1: Section1): Option[(String, Int, Int)] = entry.source match
@@ -138,8 +119,7 @@ object StepRatifier:
     val entry = context.entry
     val deviations = Vector.newBuilder[String]
     proposal.parseError.foreach(e => deviations += s"Your reply could not be used ($e). Return {\"constructs\": [...]} as specified.")
-    val origin = originText(context, s1)
-    val allowedSlots = Slots.ByKind.getOrElse(entry.kind, Slots.All)
+    val allowedSlots = Slots.allowed(entry.kinds)
     val seen = scala.collection.mutable.Set.empty[String]
 
     val judged = proposal.constructs.zipWithIndex.map { (c, i) =>
@@ -157,39 +137,23 @@ object StepRatifier:
       else if !seen.add(Text.squash(c.phrase).toLowerCase) then
         result("rejected", "the same phrase was proposed twice", span = span)
       else if !allowedSlots.contains(c.slot) then
-        deviations += s"$label: slot '${c.slot}' does not fit a ${entry.kind} requirement; use one of ${allowedSlots.mkString(", ")}."
-        result("rejected", s"slot '${c.slot}' does not fit kind ${entry.kind}", span = span)
+        deviations += s"$label: slot '${c.slot}' does not fit a ${entry.kinds.mkString("/")} requirement; use one of ${allowedSlots.mkString(", ")}."
+        result("rejected", s"slot '${c.slot}' does not fit kind ${entry.kinds.mkString("/")}", span = span)
       else
-        val accepted = Vector(entry.text, origin)
-        def valueCheck(reason: String, provenance: Value, extra: Seq[String] = Nil) =
-          unsupportedValues(c.meaning, accepted ++ extra) match
-            case Vector() => result("accepted", reason, provenance, span)
-            case vs => result("provisional", s"the reading introduces ${vs.mkString(", ")}, which no accepted source states", provenance, span)
+        // values a reading may state: those of the requirement, of the user's words behind it, and of what it refers to
+        val accepted = entry.text +: context.supportingTexts
         val distinctReadings = c.readings.map(a => Text.squash(a).toLowerCase).distinct.size
         c.claim match
           case "determined" =>
-            valueCheck("the requirement's own words fix this reading",
-              ujson.Obj("type" -> "requirement", "requirementId" -> entry.id))
-          case "settled" =>
-            // The model's label is only a hint: the quote is looked up in every text the user wrote, deterministically.
-            // A failed citation does not cost a new attempt: the open question the model found stands as a gap.
-            val derivedFrom = entry.source.userWords
-            val readingValues = c.readings.flatMap(valueTokens).distinct
-            citationSources(context, s1, c).find((text, _) => Text.occursOnce(text, c.citationQuote)) match
-              case None =>
-                result("openGap", "the open question was claimed answered, but the quote is not in anything the user wrote", ujson.Null, span)
-              case Some(_) if Text.squash(entry.text).contains(Text.squash(c.citationQuote)) ||
-                  Text.squash(derivedFrom).contains(Text.squash(c.citationQuote)) =>
-                result("openGap", "the cited passage is the one this requirement was derived from, so it cannot answer a question about it", ujson.Null, span)
-              case Some(_) if readingValues.nonEmpty && unsupportedValues(readingValues.mkString(" "), Seq(c.citationQuote)).size == readingValues.size =>
-                result("openGap", s"the readings differ by ${readingValues.mkString(", ")}, and the cited passage states none of them", ujson.Null, span)
-              case Some((text, prov)) =>
-                valueCheck("settled by a verified citation",
-                  ujson.Obj.from(prov.obj.toSeq :+ ("quote" -> ujson.Str(c.citationQuote))), Seq(text))
+            unsupportedValues(c.meaning, accepted) match
+              case Vector() => result("accepted", "the requirement's own words fix this reading",
+                ujson.Obj("type" -> "requirement", "requirementId" -> entry.id), span)
+              case vs => result("provisional", s"the reading introduces ${vs.mkString(", ")}, which no accepted source states",
+                ujson.Obj("type" -> "requirement", "requirementId" -> entry.id), span)
           case _ =>
             if distinctReadings < 2 then
               deviations += s"$label: an open question needs at least two different readings."
-            result("openGap", "the phrase leaves a question open, and no accepted source answers it", ujson.Null, span)
+            result("openGap", "the phrase leaves a question open that neither the requirement nor its evidence answers", ujson.Null, span)
     }
 
     // Coverage: every substantive part of the requirement must belong to some kept construct. When nothing was kept,

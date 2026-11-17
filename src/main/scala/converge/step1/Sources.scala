@@ -58,15 +58,25 @@ enum Source:
     case InstructionSpan(_, quote, _, _)   => quote
     case DecisionSource(_, _, answer, _)   => answer
 
-/** One row of the source map: a requirement (or design note) and its verified source. */
-final case class SourceEntry(id: String, kind: String, text: String, binding: Boolean, source: Source, supersedes: Vector[String]):
+/**
+ * One row of the source map: a requirement (or design note), its verified source, and the evidence Section 1 recorded
+ * for it (verified too): its derivation, the kinds merged into it, and the requirements its phrases refer to.
+ */
+final case class SourceEntry(id: String, kind: String, text: String, binding: Boolean, source: Source, supersedes: Vector[String],
+    derivation: Value = ujson.Arr(), mergedKinds: Vector[String] = Vector.empty, references: Vector[(String, String)] = Vector.empty):
+  /** Its own kind first, then the kinds merged into it. */
+  def kinds: Vector[String] = (kind +: mergedKinds).distinct
+
   def toJson: Value =
     val o = ujson.Obj("id" -> id, "kind" -> kind, "text" -> text, "binding" -> binding, "source" -> source.toJson)
     if supersedes.nonEmpty then o("supersedes") = ujson.Arr.from(supersedes)
+    if mergedKinds.nonEmpty then o("mergedKinds") = ujson.Arr.from(mergedKinds)
+    if references.nonEmpty then o("refersTo") = ujson.Arr.from(references.map((p, r) => ujson.Obj("phrase" -> p, "requirement" -> r)))
+    if Derivation.steps(derivation).nonEmpty then o("derivation") = derivation
     o
 
 object MapSources:
-  private def locate(s1: Section1, owner: String, origin: Origin): Either[String, Source] = origin match
+  def locate(s1: Section1, owner: String, origin: Origin): Either[String, Source] = origin match
     case Origin.Prompt(id, quote) =>
       s1.prompt(id) match
         case None => Left(s"$owner: prompt $id is not in the prompt record")
@@ -93,18 +103,28 @@ object MapSources:
   def run(snapshot: ContractSnapshot): Vector[SourceEntry] =
     val s1 = snapshot.section1
     val problems = Vector.newBuilder[String]
+    val ids = s1.requirements.map(_.id).toSet
     val requirementRows = s1.requirements.flatMap { r =>
+      // A decision-backed requirement must be one the decision actually lists: as it was created, before any merge.
+      val created = Derivation.textBeforeMerge(r.derivation).getOrElse(r.text)
       val located = locate(s1, r.id, r.origin).flatMap { src =>
         src match
-          // A decision-backed requirement must be one the decision actually lists.
-          case Source.DecisionSource(id, _, _, _) =>
-            val listed = s1.decision(id).exists(_.requirements.exists((k, t) => k == r.kind && Text.squash(t) == Text.squash(r.text)))
-            if listed then Right(src) else Left(s"${r.id}: decision $id does not list this requirement")
+          case Source.DecisionSource(id, _, _, _) if !Derivation.lists(s1, id, r.kind, created) =>
+            Left(s"${r.id}: decision $id does not list this requirement")
           case _ => Right(src)
       }
+      val evidence = Derivation.problems(s1, r.id, r.text, r.origin, r.derivation) ++
+        r.refersTo.flatMap { (phrase, target) =>
+          List(
+            Option.when(!ids(target))(s"${r.id}: refers to $target, which is not a requirement of the contract"),
+            Option.when(!Text.occursOnce(r.text, phrase))(s"${r.id}: the phrase '${phrase.take(60)}' it refers with does not occur once in its text")
+          ).flatten
+        }
+      problems ++= evidence
       located match
-        case Left(p)    => problems += p; None
-        case Right(src) => Some(SourceEntry(r.id, r.kind, r.text, binding = true, src, r.supersedes))
+        case Left(p) => problems += p; None
+        case Right(src) =>
+          Option.when(evidence.isEmpty)(SourceEntry(r.id, r.kind, r.text, binding = true, src, r.supersedes, r.derivation, r.mergedKinds, r.refersTo))
     }
     val noteRows = s1.designNotes.flatMap { n =>
       locate(s1, n.id, n.origin) match

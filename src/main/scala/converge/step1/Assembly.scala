@@ -89,6 +89,9 @@ object Evidence:
         case Source.DecisionSource(_, _, _, by)    => by
       val o = ujson.Obj("evidenceId" -> f"E${i + 1}%03d", "kind" -> "commitment", "subject" -> e.id,
         "source" -> e.source.toJson, "issuer" -> issuer, "version" -> 1, "scope" -> "task", "status" -> "active")
+      // a requirement merged from decisions also rests on whoever answered them
+      val answered = Derivation.answeredBy(e.derivation).filterNot(_ == issuer)
+      if answered.nonEmpty then o("decisionsAnsweredBy") = ujson.Arr.from(answered)
       if e.supersedes.nonEmpty then o("supersedes") = ujson.Arr.from(e.supersedes)
       o
     }

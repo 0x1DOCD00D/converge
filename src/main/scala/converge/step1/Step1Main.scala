@@ -40,8 +40,7 @@ object Step1Main:
             flags("requirement").split(",").map(_.trim).filter(_.nonEmpty).foreach { id =>
               val entry = entries.find(_.id == id).getOrElse(throw Step1Error(s"no requirement $id"))
               println(s"===== $id: ${entry.text}")
-              val e = Step1.elaborate(ElaborationContext(entry, s1.seedPrompt.map(_.text).getOrElse(""), s1.decisions), s1,
-                elaborator, reviewer, attempts)
+              val e = Step1.elaborate(Step1.contextFor(entry, entries), s1, elaborator, reviewer, attempts)
               e.attempts.zipWithIndex.foreach { case ((p, _, r), i) =>
                 println(s"--- attempt ${i + 1}: ${p.usage.promptTokens} prompt tokens, ${p.usage.generatedTokens} generated, " +
                   s"${p.usage.totalDurationNs / 1000000000L} s")
