@@ -13,10 +13,25 @@ final class ScriptedElaborator(script: (ElaborationContext, Int) => Vector[Propo
     feedbackSeen += ((context.entry.id, attempt, feedback))
     Proposal(script(context, attempt), "", Usage(), None)
 
+/** A stand-in for the reviewer: answers each attempt with `reply`, and remembers what it was shown. */
+final class ScriptedReviewer(reply: (Vector[ReviewItem], Int) => ReviewAnswer) extends Reviewer:
+  val seen = scala.collection.mutable.ListBuffer.empty[(String, String, Vector[ReviewItem], Int)]
+  def describe: ujson.Obj = ujson.Obj("type" -> "scripted")
+  def review(entry: SourceEntry, origin: String, items: Vector[ReviewItem], attempt: Int): ReviewAnswer =
+    seen += ((entry.id, origin, items, attempt))
+    reply(items, attempt)
+
+object ScriptedReviewer:
+  /** Judges each item on its own, copying its number and phrase back correctly. */
+  def judging(judge: ReviewItem => Option[(String, String)]): ScriptedReviewer =
+    ScriptedReviewer((items, _) => ReviewAnswer(
+      items.flatMap(i => judge(i).map((v, added) => ReviewJudgement(i.index, i.phrase, v, added))), "", Usage(), None))
+
 class Step1Spec extends munit.FunSuite:
 
   private val causewayDir: Path = Paths.get(getClass.getResource("/step1/causeway").toURI)
   private def causeway: Section1Files = Section1Files.fromDirectory(causewayDir)
+  private def approving = ScriptedReviewer.judging(_ => Some(("restates", "")))
 
   private def construct(phrase: String, slot: String, meaning: String, question: String = "",
       readings: Vector[String] = Vector.empty, source: String = "none", decision: String = "", quote: String = "") =
@@ -30,6 +45,9 @@ class Step1Spec extends munit.FunSuite:
   private def ratify(id: String, cs: ProposedConstruct*): Ratification =
     val (ctx, s1) = context(id)
     StepRatifier.ratify(ctx, Proposal(cs.toVector, "", Usage(), None), s1)
+
+  /** The deviations other than coverage: the single-construct tests below leave the rest of a requirement uncovered on purpose. */
+  private def ruleDeviations(r: Ratification): Vector[String] = r.deviations.filterNot(_.contains("is not covered by any construct"))
 
   // ---- 1.1 ----
 
@@ -97,14 +115,14 @@ class Step1Spec extends munit.FunSuite:
     val r = ratify("REQ-017", construct("a default limit applies", "precondition", "Without a limit, a default limit of 100 commits applies."))
     assertEquals(r.constructs.head.verdict, "provisional")
     assert(r.constructs.head.reason.contains("100"), r.constructs.head.reason)
-    assertEquals(r.deviations, Vector.empty)
+    assertEquals(ruleDeviations(r), Vector.empty)
   }
 
   test("1.4 turns a phrase with two readings into an open gap") {
     val r = ratify("REQ-017", construct("a default limit applies", "precondition", "Some default limit applies.",
       "How large is the default limit?", Vector("a fixed number of the most recent commits", "commits from a fixed recent time window")))
     assertEquals(r.constructs.head.verdict, "openGap")
-    assertEquals(r.deviations, Vector.empty)
+    assertEquals(ruleDeviations(r), Vector.empty)
   }
 
   test("1.4 accepts a settled reading only when its citation is verified") {
@@ -119,7 +137,7 @@ class Step1Spec extends munit.FunSuite:
       "The user may give a commit count or a start date.", "Is the scan limited by count or by date?", Vector("count", "date"), source = "decision",
       decision = "DEC-004", quote = "the user may pick any limit"))
     assertEquals(bad.constructs.head.verdict, "openGap")
-    assertEquals(bad.deviations, Vector.empty) // the question stands as a gap; no new attempt is spent on it
+    assertEquals(ruleDeviations(bad), Vector.empty) // the question stands as a gap; no new attempt is spent on it
   }
 
   test("1.4 does not let a requirement's own source answer a question about it, nor a passage without the values in question") {
@@ -144,7 +162,7 @@ class Step1Spec extends munit.FunSuite:
       quote = "otherwise the tool pins the commit current at that moment"))
     assertEquals(r.constructs.head.verdict, "accepted")
     assertEquals(r.constructs.head.provenance("decision").str, "DEC-002")
-    assertEquals(r.deviations, Vector.empty)
+    assertEquals(ruleDeviations(r), Vector.empty)
   }
 
   test("1.4 rejects a slot that does not fit the requirement's kind, and an open question needs two readings") {
@@ -152,7 +170,7 @@ class Step1Spec extends munit.FunSuite:
       construct("limit the scan by a number of commits or a start date", "effect", "x"),
       construct("a default limit applies", "precondition", "x", "How large is it?", Vector("only one")))
     assertEquals(r.constructs.map(_.verdict), Vector("rejected", "openGap"))
-    assertEquals(r.deviations.size, 2)
+    assertEquals(ruleDeviations(r).size, 2)
   }
 
   test("1.4 places a phrase of a prompt-backed requirement in the user's prompt") {
@@ -171,16 +189,149 @@ class Step1Spec extends munit.FunSuite:
     val (ctx, s1) = context("REQ-017")
     val elaborator = ScriptedElaborator((_, attempt) =>
       if attempt == 1 then Vector(construct("a default limit of 50", "precondition", "x"))
-      else Vector(construct("a default limit applies", "precondition", "x", "How large is it?", Vector("a", "b"))))
-    val e = Step1.elaborate(ctx, s1, elaborator, maxAttempts = 3)
+      else Vector(construct("The user can limit the scan by a number of commits or a start date", "precondition", "x"),
+        construct("without one, a default limit applies", "precondition", "x", "How large is it?", Vector("a", "b"))))
+    val e = Step1.elaborate(ctx, s1, elaborator, approving, maxAttempts = 3)
     assertEquals(e.attempts.size, 2)
     assert(elaborator.feedbackSeen(1)._3.head.contains("copied exactly"), elaborator.feedbackSeen.toString)
-    assertEquals(e.constructs.map(_.verdict), Vector("openGap"))
+    assertEquals(e.constructs.map(_.verdict), Vector("accepted", "openGap"))
 
-    val silent = Step1.elaborate(ctx, s1, ScriptedElaborator((_, _) => Vector.empty), maxAttempts = 3)
+    val silent = Step1.elaborate(ctx, s1, ScriptedElaborator((_, _) => Vector.empty), approving, maxAttempts = 3)
     assertEquals(silent.attempts.size, 1)
     assert(silent.constructs.head.fallback)
     assertEquals(silent.constructs.head.phrase, ctx.entry.text)
+  }
+
+  // ---- 1.4: coverage ----
+
+  test("1.4 reports the part of a requirement that no kept construct covers") {
+    // qwen3:4b split REQ-022's "or a repository or commit does not exist" into phrases the requirement does not contain;
+    // with those rejected, the condition and the requirement's whole reaction were covered by nothing
+    val r = ratify("REQ-022",
+      construct("When GitHub is unreachable", "errorPolicy", "x"),
+      construct("or rate-limited", "errorPolicy", "x"),
+      construct("or a repository does not exist", "errorPolicy", "x"))
+    assertEquals(r.constructs.map(_.verdict), Vector("accepted", "accepted", "rejected"))
+    val (ctx, _) = context("REQ-022")
+    assertEquals(r.uncovered.map((s, e) => ctx.entry.text.substring(s, e)),
+      Vector("or a repository or commit does not exist, the user is told what failed"))
+    assert(r.deviations.exists(_.contains("\"or a repository or commit does not exist, the user is told what failed\" is not covered")), r.deviations)
+  }
+
+  test("1.4 needs no construct for words that carry no requirement, but does for every other word") {
+    val full = ratify("REQ-017",
+      construct("The user can limit the scan by a number of commits or a start date", "precondition", "x"),
+      construct("without one, a default limit applies", "precondition", "x"))
+    assertEquals(full.uncovered, Vector.empty)
+    assertEquals(full.deviations, Vector.empty)
+    // "the" between the phrases and the final "." need no construct
+    val stop = ratify("REQ-027", construct("Agents cannot read", "frame", "x"), construct(".env file", "frame", "x"))
+    assertEquals(stop.uncovered, Vector.empty)
+    // "cannot" does
+    val negation = ratify("REQ-027", construct("Agents", "frame", "x"), construct("read the .env file.", "frame", "x"))
+    val (ctx, _) = context("REQ-027")
+    assertEquals(negation.uncovered.map((s, e) => ctx.entry.text.substring(s, e)), Vector("cannot"))
+  }
+
+  test("1.3/1.4 text still uncovered after the last attempt stands as written, next to the kept constructs") {
+    val (ctx, s1) = context("REQ-022")
+    val elaborator = ScriptedElaborator((_, _) =>
+      Vector(construct("When GitHub is unreachable", "errorPolicy", "x"), construct("or rate-limited", "errorPolicy", "x")))
+    val e = Step1.elaborate(ctx, s1, elaborator, approving, maxAttempts = 2)
+    assertEquals(e.attempts.size, 2)
+    assert(elaborator.feedbackSeen(1)._3.exists(_.contains("is not covered")), elaborator.feedbackSeen.toString)
+    assertEquals(e.constructs.map(_.fallback), Vector(false, false, true))
+    val partial = e.constructs.last
+    assertEquals(partial.phrase, "or a repository or commit does not exist, the user is told what failed")
+    assertEquals(partial.verdict, "accepted")
+    assertEquals(partial.requirementSpan.map((s, t) => ctx.entry.text.substring(s, t)), Some(partial.phrase))
+    assert(partial.reason.contains("no proposed construct covered this part"), partial.reason)
+    assertEquals(e.uncovered.size, 1)
+  }
+
+  // ---- 1.4: the reviewer ----
+
+  test("1.4 the reviewer moves a meaning that adds to its requirement to provisional") {
+    // qwen3:4b read REQ-027 "Agents cannot read the .env file." as "The application is not permitted to read the .env file."
+    val (ctx, s1) = context("REQ-027")
+    val reviewer = ScriptedReviewer.judging(i => if i.meaning.contains("application") then Some(("adds", "The application")) else Some(("restates", "")))
+    val e = Step1.elaborate(ctx, s1, ScriptedElaborator((_, _) =>
+      Vector(construct("Agents cannot read the .env file.", "frame", "The application is not permitted to read the .env file."))), reviewer, 3)
+    val c = e.constructs.head
+    assertEquals(c.verdict, "provisional")
+    assert(c.reason.contains("adds \"The application\""), c.reason)
+    assertEquals(c.review.map(_("verdict").str), Some("adds"))
+    assertEquals(reviewer.seen.head._3.map(_.meaning), Vector("The application is not permitted to read the .env file."))
+
+    val restated = Step1.elaborate(ctx, s1, ScriptedElaborator((_, _) =>
+      Vector(construct("Agents cannot read the .env file.", "frame", "Agents are not able to read the .env file."))), reviewer, 3)
+    assertEquals(restated.constructs.head.verdict, "accepted")
+  }
+
+  test("1.4 the reviewer sees only accepted meanings, and a meaning it does not judge is not accepted") {
+    val (ctx, s1) = context("REQ-017")
+    val silent = ScriptedReviewer.judging(_ => None)
+    val e = Step1.elaborate(ctx, s1, ScriptedElaborator((_, _) => Vector(
+      construct("The user can limit the scan by a number of commits or a start date", "precondition", "x"),
+      construct("without one, a default limit applies", "precondition", "A default of 100 commits applies."))), silent, 3)
+    // the second is provisional already (100 is stated nowhere); the reviewer is not asked about it
+    assertEquals(silent.seen.head._3.map(_.phrase), Vector("The user can limit the scan by a number of commits or a start date"))
+    assertEquals(e.constructs.map(_.verdict), Vector("provisional", "provisional"))
+    assert(e.constructs.head.reason.contains("could not be reviewed"), e.constructs.head.reason)
+    // a decision-backed requirement is shown to the reviewer with the question and the answer it came from
+    val (ctx11, _) = context("REQ-011")
+    assert(Review.originFor(ctx11.entry).startsWith("Decision DEC-001. Question:"), Review.originFor(ctx11.entry))
+  }
+
+  test("1.4 the reviewer's reply is read strictly") {
+    val parsed = ReviewPrompt.parse(ujson.read(
+      """{"reviews": [{"construct": 1, "phrase": "a", "verdict": "restates", "added": ""},
+        |{"construct": 2, "phrase": "b", "verdict": "maybe", "added": ""},
+        |{"construct": 3, "phrase": "c", "verdict": "ADDS", "added": " local database "}]}""".stripMargin))
+    assertEquals(parsed.map(_.map(j => (j.construct, j.verdict, j.added))),
+      Right(Vector((1, "restates", ""), (3, "adds", "local database"))))
+    assert(ReviewPrompt.parse(ujson.read("""{"verdicts": []}""")).isLeft)
+  }
+
+  test("1.4 a judgement counts only if it is the one entry for its number and copies its phrase; otherwise the reviewer is asked again") {
+    val (ctx, s1) = context("REQ-017")
+    val two = ScriptedElaborator((_, _) => Vector(
+      construct("The user can limit the scan by a number of commits or a start date", "precondition", "x"),
+      construct("without one, a default limit applies", "precondition", "y")))
+    // attempt 1 numbers from 0 (shifted) and repeats a number; attempt 2 answers properly
+    val shifted = ScriptedReviewer((items, attempt) =>
+      if attempt == 1 then ReviewAnswer(Vector(
+        ReviewJudgement(0, items(0).phrase, "adds", "z"), ReviewJudgement(1, items(1).phrase, "restates", ""),
+        ReviewJudgement(2, items(1).phrase, "restates", ""), ReviewJudgement(2, items(1).phrase, "adds", "w")), "", Usage(), None)
+      else ReviewAnswer(Vector(ReviewJudgement(1, items(0).phrase, "restates", ""), ReviewJudgement(2, items(1).phrase, "adds", "w")),
+        "", Usage(), None))
+    val e = Step1.elaborate(ctx, s1, two, shifted, 3)
+    assertEquals(shifted.seen.map(_._4).toVector, Vector(1, 2))
+    assertEquals(e.review.size, 2)
+    assertEquals(e.constructs.map(_.verdict), Vector("accepted", "provisional"))
+
+    // the same bad reply twice: nothing is accepted
+    val alwaysShifted = ScriptedReviewer((items, _) => ReviewAnswer(
+      items.map(i => ReviewJudgement(i.index - 1, i.phrase, "restates", "")), "", Usage(), None))
+    assertEquals(Step1.elaborate(ctx, s1, two, alwaysShifted, 3).constructs.map(_.verdict), Vector("provisional", "provisional"))
+
+    // an unreadable first reply is asked again; a good second reply decides
+    val flaky = ScriptedReviewer((items, attempt) =>
+      if attempt == 1 then ReviewAnswer(Vector.empty, "not json", Usage(), Some("reply is not valid JSON"))
+      else ReviewAnswer(items.map(i => ReviewJudgement(i.index, i.phrase, "restates", "")), "", Usage(), None))
+    assertEquals(Step1.elaborate(ctx, s1, two, flaky, 3).constructs.map(_.verdict), Vector("accepted", "accepted"))
+  }
+
+  test("1.4 uncovered text that occurs more than once costs no attempt, and a word's trailing punctuation does not hide a stopword") {
+    // REQ-011 says "not" twice ("not forks, not archived"), so a construct for one "not" alone could never be unique
+    val r = ratify("REQ-011",
+      construct("Discovery returns only public repositories that are", "postcondition", "x"),
+      construct("forks, not archived, and have at least one closed issue or merged pull request.", "postcondition", "x"))
+    val (ctx, _) = context("REQ-011")
+    assertEquals(r.uncovered.map((s, e) => ctx.entry.text.substring(s, e)), Vector("not"))
+    assertEquals(r.deviations, Vector.empty)
+    assertEquals(StepRatifier.uncoveredSpans("Keep it.", Seq((0, 4))), Vector.empty)
+    assertEquals(StepRatifier.uncoveredSpans("Keep data.", Seq((0, 4))), Vector((5, 9)))
   }
 
   // ---- 1.5 to 1.8 ----
@@ -189,7 +340,7 @@ class Step1Spec extends munit.FunSuite:
     Vector(construct(ctx.entry.text, Slots.default(ctx.entry.kind), ctx.entry.text)))
 
   test("a full run builds every record, and the same inputs give the same epoch") {
-    val a = Step1.run(causeway, wholeRequirement, 3)
+    val a = Step1.run(causeway, wholeRequirement, approving, 3)
     assertEquals(a.records.map(_._1), Step1.RecordNames)
     val spec = a.record("specIR")
     assertEquals(spec("protectedRequirements").arr.size, 29)
@@ -198,12 +349,25 @@ class Step1Spec extends munit.FunSuite:
     assertEquals(spec("variableCandidates").arr.map(_("id").str).toVector, Vector("DN-01"))
     assertEquals(a.record("evidenceLedger")("entries").arr.size, 29)
     assertEquals(a.record("controllerState")("revision").num.toInt, 0)
-    val b = Step1.run(causeway, wholeRequirement, 3)
+    val b = Step1.run(causeway, wholeRequirement, approving, 3)
     assertEquals(a.record("epochManifest")("manifestId"), b.record("epochManifest")("manifestId"))
   }
 
+  test("a full run records the review and the coverage in the summary and the reviewer in the epoch") {
+    val a = Step1.run(causeway, wholeRequirement, approving, 3)
+    val review = a.summary("review")
+    assertEquals(review("calls").num.toInt, 29)
+    assertEquals(review("restates").num.toInt, 29)
+    assertEquals(a.summary("requirementsWithUncoveredText").num.toInt, 0)
+    assertEquals(a.record("epochManifest")("reviewer")("type").str, "scripted")
+    assert(a.record("epochManifest")("ratifier")("coverage")("stopwords").arr.nonEmpty)
+    assertEquals(a.record("ratifiedAssignments")("requirements")(0)("uncovered").arr.size, 0)
+    assertEquals(a.record("specIR")("acceptedMeanings")(0)("review")("verdict").str, "restates")
+    assertEquals(a.record("constructTable")("constructs")(0)("review")("verdict").str, "restates")
+  }
+
   test("the ledger records who issued each commitment") {
-    val ledger = Step1.run(causeway, wholeRequirement, 3).record("evidenceLedger")("entries").arr
+    val ledger = Step1.run(causeway, wholeRequirement, approving, 3).record("evidenceLedger")("entries").arr
     assertEquals(ledger.head("issuer").str, "user (prompt P-0001)")
     assertEquals(ledger(10)("subject").str, "REQ-011")
     assert(ledger(10)("issuer").str.startsWith("assistant"), ledger(10)("issuer").str)
@@ -213,7 +377,8 @@ class Step1Spec extends munit.FunSuite:
 
   test("the service validates a request at once, runs it in the background and serves the records") {
     val out = Files.createTempDirectory("step1")
-    val server = new Step1Server(0, out, 3, ujson.Obj("service" -> "test"), () => wholeRequirement).start()
+    val server = new Step1Server(0, out, 3, ujson.Obj("service" -> "test"), () => wholeRequirement,
+      () => approving).start()
     val base = s"http://localhost:${server.getAddress.getPort}"
     val http = HttpClient.newHttpClient()
     def get(path: String) = http.send(HttpRequest.newBuilder(URI.create(base + path)).GET().build(), HttpResponse.BodyHandlers.ofString())

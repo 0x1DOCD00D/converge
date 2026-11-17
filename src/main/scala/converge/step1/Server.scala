@@ -22,7 +22,8 @@ import ujson.Value
  *
  * Runs are executed one at a time (the model is the bottleneck) and stored under `outRoot/<runId>/`.
  */
-final class Step1Server(port: Int, outRoot: Path, maxAttempts: Int, info: ujson.Obj, makeElaborator: () => Elaborator):
+final class Step1Server(port: Int, outRoot: Path, maxAttempts: Int, info: ujson.Obj, makeElaborator: () => Elaborator,
+    makeReviewer: () => Reviewer):
 
   private final class RunState(val runId: String, val snapshotId: String, val total: Int):
     @volatile var status: String = "queued"
@@ -43,6 +44,7 @@ final class Step1Server(port: Int, outRoot: Path, maxAttempts: Int, info: ujson.
   private val runs = new ConcurrentHashMap[String, RunState]()
   private val worker = Executors.newSingleThreadExecutor(r => { val t = new Thread(r, "step1-worker"); t.setDaemon(true); t })
   private lazy val elaborator: Elaborator = makeElaborator()
+  private lazy val reviewer: Reviewer = makeReviewer()
   private val stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC)
 
   def start(): HttpServer =
@@ -88,7 +90,7 @@ final class Step1Server(port: Int, outRoot: Path, maxAttempts: Int, info: ujson.
         val task: Runnable = () =>
           state.status = "running"
           try
-            val outcome = Step1.run(files, elaborator, maxAttempts, (d, _, c) => { state.done = d; state.current = c })
+            val outcome = Step1.run(files, elaborator, reviewer, maxAttempts, (d, _, c) => { state.done = d; state.current = c })
             Step1.write(outRoot.resolve(runId), outcome)
             state.summary = Some(outcome.summary)
             state.status = "done"

@@ -2,8 +2,19 @@ package converge.step1
 
 import ujson.Value
 
-/** The outcome of 1.3 and 1.4 for one requirement: every attempt, and the constructs that were kept. */
-final case class Elaborated(entry: SourceEntry, attempts: Vector[(Proposal, Vector[String], Ratification)], constructs: Vector[RatifiedConstruct])
+/**
+ * The outcome of 1.3 and 1.4 for one requirement: every attempt; the constructs that were kept (after review, plus any
+ * fallbacks); every construct of the last attempt as finally judged (rejected ones too), plus fallbacks; the reviewer's
+ * answer; and the spans of the requirement the last attempt left uncovered (each now a fallback).
+ */
+final case class Elaborated(
+    entry: SourceEntry,
+    attempts: Vector[(Proposal, Vector[String], Ratification)],
+    constructs: Vector[RatifiedConstruct],
+    ratified: Vector[RatifiedConstruct],
+    review: Vector[ReviewAnswer],
+    uncovered: Vector[(Int, Int)]
+)
 
 /** 1.4 also yields the construct table: one row per kept construct, with stable ids. */
 final case class ConstructRow(constructId: String, construct: RatifiedConstruct):
@@ -14,6 +25,7 @@ final case class ConstructRow(constructId: String, construct: RatifiedConstruct)
     c.requirementSpan.foreach((s, e) => o("requirementSpan") = ujson.Arr(s, e))
     c.promptSpan.foreach((id, s, e) => o("promptSpan") = ujson.Obj("promptId" -> id, "span" -> ujson.Arr(s, e)))
     if c.fallback then o("fallback") = true
+    c.review.foreach(r => o("review") = r)
     o
 
 object ConstructTable:
@@ -31,6 +43,8 @@ object SpecIR:
       val o = ujson.Obj("constructId" -> r.constructId, "requirementId" -> c.requirementId, "phrase" -> c.phrase,
         "slot" -> c.slot, "meaning" -> c.meaning, "provenance" -> c.provenance, "reason" -> c.reason)
       c.promptSpan.foreach((id, s, e) => o("promptSpan") = ujson.Obj("promptId" -> id, "span" -> ujson.Arr(s, e)))
+      c.review.foreach(r => o("review") = r)
+      if c.fallback then o("fallback") = true
       o
     val gaps = rows.filter(_.construct.verdict == "openGap").zipWithIndex.map { (r, i) =>
       ujson.Obj("gapId" -> f"G-${i + 1}%03d", "constructId" -> r.constructId, "requirementId" -> r.construct.requirementId,
@@ -84,7 +98,7 @@ object Evidence:
 object Epoch:
   val RequirementKinds: Vector[String] = Vector("validInput", "expectedOutput", "persistentEffect", "errorHandling", "resourcePermission")
 
-  def manifest(snapshot: ContractSnapshot, elaborator: ujson.Obj, maxAttempts: Int): Value =
+  def manifest(snapshot: ContractSnapshot, elaborator: ujson.Obj, reviewer: ujson.Obj, maxAttempts: Int): Value =
     val fields = ujson.Obj(
       "contractSnapshot" -> snapshot.id,
       "contractSha256" -> snapshot.sha256,
@@ -93,7 +107,9 @@ object Epoch:
       "evidencePolicy" -> ujson.Obj("version" -> 1, "sha256" -> Text.sha256(ujson.write(Evidence.Policy))),
       "grammar" -> ujson.Obj("requirementKinds" -> ujson.Arr.from(RequirementKinds), "slots" -> ujson.Arr.from(Slots.All)),
       "elaborator" -> elaborator,
-      "ratifier" -> ujson.Obj("maxAttempts" -> maxAttempts),
+      "reviewer" -> reviewer,
+      "ratifier" -> ujson.Obj("maxAttempts" -> maxAttempts,
+        "coverage" -> ujson.Obj("stopwords" -> ujson.Arr.from(StepRatifier.CoverageStopwords))),
       "contracts" -> ujson.Arr()
     )
     val id = Text.sha256(ujson.write(fields))

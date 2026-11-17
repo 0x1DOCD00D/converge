@@ -358,9 +358,31 @@ The concrete oracle does not generate the target application and does not assume
 `src/main/scala/converge/step1/` implements CONVERGE Step 1: it takes the reconciled behavioral contract produced by
 GRAIL-DX Section 1 and turns it into the records the rest of CONVERGE works from (contract snapshot, source map, proposed
 and ratified meanings, construct table, specIR, evidence policy and ledger, epoch manifest, controller state).
-A local model (Ollama, `qwen3:4b` by default) is the elaborator; a deterministic ratifier accepts only what the
-contract, or a verified quote of the user's words, supports. The full description, with a worked example, is in the
-GRAIL-DX repository: `docs/section-2/converge-step-1.md`.
+A local model (Ollama, `qwen3:4b` by default) is the elaborator. A deterministic ratifier checks each proposed construct:
+its phrase must be copied exactly from the requirement and fit the requirement's kind, a cited answer must be found in
+what the user wrote, and a meaning that introduces a value (number, environment-variable name, flag) no source states is
+kept provisional. Together, the kept constructs must cover every part of the requirement that carries a requirement
+word. Uncovered text is fed back to the elaborator (unless it occurs more than once in the requirement, so that no
+phrase could name it); text still uncovered after the last attempt becomes a fallback construct that stands as
+written. Code cannot check that a free-text meaning says no more than its phrase, so a second model, the reviewer
+(`CONVERGE_STEP1_REVIEW_MODEL`, by default the elaborator's model; it shares the elaborator's other settings), reads
+every meaning the ratifier would accept and answers, per meaning, "restates" or "adds". It can only move a construct
+from accepted to provisional, never the reverse. A judgement counts only if it is the single entry for that meaning's
+number and copies its phrase back; a reply that cannot be read or leaves a meaning unjudged is asked once more, and a
+meaning still unjudged is not accepted.
+
+"Accepted" therefore means one of two things. For a construct the model proposed: provenance, slot and values checked
+by code, and the meaning judged a restatement by the reviewer, which is not a proof that the meaning is equivalent to
+the requirement. For a fallback (`"fallback": true`): the user's words stand as written, unanalysed for open questions
+and not reviewed.
+
+Records: each construct carries the reviewer's verdict as `review` (in `ratifiedAssignments`, `constructTable` and
+`specIR`); `ratifiedAssignments` lists the text each requirement left `uncovered` after the last attempt;
+`taskIRProposal` keeps every reviewer reply; the summary counts `review` calls and verdicts and
+`requirementsWithUncoveredText`, and `modelCalls` includes reviewer calls. The epoch manifest records the `reviewer` and
+the coverage stopwords (`ratifier.coverage`), so manifest ids differ from runs made before these checks.
+
+The full description, with a worked example, is in the GRAIL-DX repository: `docs/section-2/converge-step-1.md`.
 
 Run it inside the devcontainer (`docker compose -p devcontainer -f .devcontainer/docker-compose.yml up -d`):
 
@@ -379,7 +401,8 @@ sbt "testOnly converge.step1.*"       # tests (a scripted elaborator stands in f
 | `GET /step1/runs/{runId}` | `queued`, `running` (with progress over the requirements), `done` (with a summary) or `failed` |
 | `GET /step1/runs/{runId}/records/{name}` | one record, e.g. `specIR`; records are also written to `out/step1/<runId>/` |
 
-Step 1 settings: `OLLAMA_MODEL` (qwen3:4b), `CONVERGE_STEP1_TEMPERATURE` (0.0), `CONVERGE_STEP1_SEED` (17),
+Step 1 settings: `OLLAMA_MODEL` (qwen3:4b), `CONVERGE_STEP1_REVIEW_MODEL` (the reviewer; default `OLLAMA_MODEL`),
+`CONVERGE_STEP1_TEMPERATURE` (0.0), `CONVERGE_STEP1_SEED` (17),
 `CONVERGE_STEP1_NUM_CTX` (4096), `CONVERGE_STEP1_ATTEMPTS` (3), `CONVERGE_STEP1_OUT` (out/step1), `CONVERGE_STEP1_PORT` (8090).
 
 ## Environment variables
